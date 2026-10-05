@@ -1,0 +1,27 @@
+// Cloudflare Workers + D1 (offre gratuite, sans carte bancaire).
+// Les secrets (META_APP_SECRET, META_VERIFY_TOKEN, APP_PAIRING_CODE, META_PAGE_ACCESS_TOKEN)
+// ne sont jamais écrits ici : `npm run cloudflare:deploy` les crée avec `wrangler secret put`.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "carnet-digital-backend",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "META_GRAPH_API_VERSION": "v25.0",
+    "BUSINESS_NAME": "Carnet Digital",
+    "CONTACT_EMAIL": "",
+    "CORS_ORIGINS": "",
+    "DEV_TOOLS": "false"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "carnet-backend",
+      // Renseigné automatiquement par `npm run cloudflare:deploy`.
+      "database_id": "c29cafc6-1c5e-4c5f-898f-f6c2342f9fb5",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

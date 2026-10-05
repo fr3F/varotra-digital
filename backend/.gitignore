@@ -1,0 +1,8 @@
+node_modules/
+data/
+.env
+.dev.vars
+.wrangler/
+dist/
+.cloudflare-secrets.json
+.cloudflare-secrets.upload.json
