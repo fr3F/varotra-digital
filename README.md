@@ -36,4 +36,4 @@ npx eas-cli@latest build --profile production --platform android   # AAB pour le
 
 ## Contribuer
 
-Voir [CONTRIBUTING.md](CONTRIBUTING.md) (branches, commits, revues, versions) et [CHANGELOG.md](CHANGELOG.md).
+Voir [CONTRIBUTING.md](CONTRIBUTING.md) (branches, commits, revues, pipelines CI/CD, versions) et [CHANGELOG.md](CHANGELOG.md).

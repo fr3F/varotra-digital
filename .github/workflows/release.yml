@@ -1,0 +1,73 @@
+# Release : pousser un tag vX.Y.Z (depuis main) crée la release GitHub avec les notes du CHANGELOG,
+# puis y joint l'APK Android construit par EAS.
+# Secret GitHub requis pour l'APK : EXPO_TOKEN (expo.dev > Access tokens). Sans lui, la release est créée sans APK.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  github-release:
+    name: Release GitHub
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Vérifier la version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for file in package.json app.json; do
+            grep -q "\"version\": \"$version\"" "$file" || { echo "$file n'est pas en version $version" >&2; exit 1; }
+          done
+      - name: Notes depuis CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \[" v "\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md || { echo "Section [$version] absente de CHANGELOG.md" >&2; exit 1; }
+      - name: Créer la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag
+
+  android-apk:
+    name: APK Android (EAS)
+    needs: github-release
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: EXPO_TOKEN absent
+        if: env.EXPO_TOKEN == ''
+        run: >-
+          echo "::warning::EXPO_TOKEN non configuré, release publiée sans APK."
+      - uses: actions/checkout@v4
+        if: env.EXPO_TOKEN != ''
+      - uses: actions/setup-node@v4
+        if: env.EXPO_TOKEN != ''
+        with:
+          node-version: 24
+          cache: npm
+      - if: env.EXPO_TOKEN != ''
+        run: npm ci
+      - name: Build EAS (profil preview → APK)
+        if: env.EXPO_TOKEN != ''
+        run: |
+          npx eas-cli@latest build --platform android --profile preview --non-interactive --wait --json > build.json
+          url=$(node -e "const b=require('./build.json');console.log((Array.isArray(b)?b[0]:b).artifacts.buildUrl)")
+          curl -fsSL "$url" -o "carnet-digital-${GITHUB_REF_NAME}.apk"
+      - name: Joindre l'APK à la release
+        if: env.EXPO_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "carnet-digital-${GITHUB_REF_NAME}.apk"

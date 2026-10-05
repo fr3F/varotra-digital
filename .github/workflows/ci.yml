@@ -4,6 +4,12 @@ on:
   pull_request:
   push:
     branches: [main, develop]
+  # Réutilisé par les pipelines de déploiement et de release avant toute mise en production.
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   app:

@@ -44,10 +44,21 @@ La CI GitHub relance ces vérifications ; une PR ne se fusionne que si elle est 
 Ne jamais committer : `backend/.cloudflare-secrets.json`, `backend/.dev.vars`, `backend/.env`, jetons Meta, code d'appairage.
 Ils sont ignorés par `.gitignore`. En cas de fuite : régénérer le secret chez Meta / Cloudflare immédiatement.
 
+## Pipelines CI/CD (GitHub Actions)
+
+| Pipeline | Déclencheur | Ce qu'il fait |
+|---|---|---|
+| `ci.yml` | Chaque Pull Request, push sur `main` / `develop` | Lint + typecheck de l'application ; tests + typecheck du serveur |
+| `deploy-backend.yml` | Fusion dans `main` touchant `backend/` (ou lancement manuel) | CI, puis migrations D1 et déploiement Cloudflare, puis vérification `/health` |
+| `release.yml` | Push d'un tag `vX.Y.Z` | CI, contrôle des versions, release GitHub (notes du CHANGELOG), APK EAS joint |
+
+Secrets du dépôt (Settings › Secrets and variables › Actions) : `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `EXPO_TOKEN`.
+L'environnement GitHub `production` peut exiger une approbation avant chaque déploiement.
+
 ## Versions et releases
 
 [SemVer](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORRECTIF`.
 
 1. Sur `develop` : mettre à jour `version` dans `package.json` et `app.json`, compléter `CHANGELOG.md`.
-2. PR `develop` → `main`, puis tag : `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`.
-3. Créer la release GitHub depuis le tag (notes = section du CHANGELOG) et y joindre l'APK EAS.
+2. PR `develop` → `main` (le serveur est déployé automatiquement à la fusion).
+3. Tag sur `main` : `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z` — la release GitHub et l'APK sont créés par `release.yml`.
