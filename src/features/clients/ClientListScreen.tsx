@@ -4,7 +4,6 @@ import { router, Stack, useFocusEffect } from 'expo-router';
 import { colors, fontSize, spacing } from '@/core/theme/theme';
 import { ClientSummary } from '@/models';
 import { customerService } from '@/services/customer.service';
-import { AppButton } from '@/shared/components/AppButton';
 import { ListRow } from '@/shared/components/ListRow';
 import { Thumbnail } from '@/shared/components/Thumbnail';
 import { SearchField } from '@/shared/components/SearchField';
@@ -73,9 +72,6 @@ export function ClientListScreen() {
         />
       )}
 
-      <View style={styles.footer}>
-        <AppButton label="+ Nouveau client" onPress={() => router.push('/clients/new')} />
-      </View>
     </View>
   );
 }
@@ -88,10 +84,4 @@ const styles = StyleSheet.create({
   trailing: { alignItems: 'flex-end' },
   spent: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   orders: { fontSize: fontSize.sm, color: colors.textMuted },
-  footer: {
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
 });

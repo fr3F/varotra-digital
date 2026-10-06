@@ -27,18 +27,15 @@ const QUICK_DATES: readonly ChipOption<number>[] = [
   { value: 2, label: 'Avant-hier' },
 ];
 
-export function ExpenseFormScreen({ expenseId }: { readonly expenseId: string | null }) {
-  const isNew = expenseId === null;
+/** Correction ou suppression d'une dépense existante (pas de création dans l'application). */
+export function ExpenseFormScreen({ expenseId }: { readonly expenseId: string }) {
   const [category, setCategory] = useState<ExpenseCategory>('PURCHASE');
-  const [loaded, setLoaded] = useState(isNew);
+  const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const { values, setField, reset } = useForm(emptyExpenseForm());
   const { busy, error, run } = useAsyncAction();
 
   useEffect(() => {
-    if (expenseId === null) {
-      return;
-    }
     let active = true;
     expenseService
       .getById(expenseId)
@@ -62,16 +59,12 @@ export function ExpenseFormScreen({ expenseId }: { readonly expenseId: string | 
   const save = () =>
     run(async () => {
       const input = parseExpenseForm(values, category);
-      if (expenseId === null) {
-        await expenseService.create(input);
-      } else {
-        await expenseService.update(expenseId, input);
-      }
+      await expenseService.update(expenseId, input);
       goBackOr('/expenses');
     });
 
   const remove = async () => {
-    if (expenseId === null || !(await confirmAction('Supprimer', 'Supprimer cette dépense ?', 'Supprimer'))) {
+    if (!(await confirmAction('Supprimer', 'Supprimer cette dépense ?', 'Supprimer'))) {
       return;
     }
     await run(async () => {
@@ -89,7 +82,7 @@ export function ExpenseFormScreen({ expenseId }: { readonly expenseId: string | 
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior="height">
-      <Stack.Screen options={{ title: isNew ? 'Nouvelle dépense' : 'Modifier la dépense' }} />
+      <Stack.Screen options={{ title: 'Modifier la dépense' }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <ErrorBanner message={error} />
         <Text style={styles.label}>Catégorie</Text>
@@ -126,10 +119,8 @@ export function ExpenseFormScreen({ expenseId }: { readonly expenseId: string | 
         <View style={styles.spacer} />
         <FormField label="Notes" multiline value={values.notes} onChangeText={(v) => setField('notes', v)} />
         <View style={styles.actions}>
-          <AppButton label={isNew ? 'Ajouter la dépense' : 'Enregistrer'} onPress={() => void save()} loading={busy} />
-          {!isNew ? (
-            <AppButton label="Supprimer" variant="danger" onPress={() => void remove()} disabled={busy} />
-          ) : null}
+          <AppButton label="Enregistrer" onPress={() => void save()} loading={busy} />
+          <AppButton label="Supprimer" variant="danger" onPress={() => void remove()} disabled={busy} />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

@@ -108,7 +108,7 @@ export function DashboardScreen() {
             <View style={styles.heroActions}>
               <View style={styles.heroAction}>
                 {/* Boutons clairs : un bouton « primary » se confondrait avec le bandeau. */}
-                <AppButton label="+ Vente" variant="secondary" onPress={() => router.push('/sales/new')} />
+                <AppButton label="Ventes" variant="secondary" onPress={() => router.push('/sales')} />
               </View>
               <View style={styles.heroAction}>
                 <AppButton label="Commandes" variant="secondary" onPress={() => router.push('/orders')} />

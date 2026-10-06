@@ -13,7 +13,6 @@ import {
   PERIODS,
 } from '@/models';
 import { expenseService, expensesVersion } from '@/services/expense.service';
-import { AppButton } from '@/shared/components/AppButton';
 import { BarList } from '@/shared/components/charts/BarList';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
@@ -110,13 +109,10 @@ export function ExpenseListScreen() {
           data === null ? (
             <LoadingView />
           ) : (
-            <EmptyState title="Aucune dépense" message="Enregistrez vos achats, transports, publicités…" />
+            <EmptyState icon="wallet-outline" title="Aucune dépense" message="Aucune dépense sur cette période." />
           )
         }
       />
-      <View style={styles.footer}>
-        <AppButton label="+ Nouvelle dépense" onPress={() => router.push('/expenses/new')} />
-      </View>
     </View>
   );
 }
@@ -157,10 +153,4 @@ const styles = StyleSheet.create({
   title: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
   meta: { fontSize: fontSize.sm, color: colors.textMuted },
   amount: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  footer: {
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
 });
