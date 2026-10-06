@@ -122,11 +122,6 @@ export function ClientDetailScreen({ clientId }: ClientDetailScreenProps) {
           <AppButton label="Appeler" onPress={() => void Linking.openURL(`tel:${phoneDigits(client.phone ?? '')}`)} />
         ) : null}
         <AppButton
-          label="Nouvelle commande"
-          variant="secondary"
-          onPress={() => router.push({ pathname: '/orders/new', params: { clientId: client.id } })}
-        />
-        <AppButton
           label="Modifier"
           variant="secondary"
           onPress={() => router.push({ pathname: '/clients/[id]/edit', params: { id: client.id } })}

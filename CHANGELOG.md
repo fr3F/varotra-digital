@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 
 ## [Unreleased]
 
+### Modifié
+- Commandes : l'application ne crée plus de commandes, elle en assure le suivi. Les commandes arrivent par Messenger ; on peut les corriger, les valider, les livrer ou les annuler. Boutons « + Nouvelle commande » retirés (liste, tableau de bord, fiche client).
+
 ### Ajouté
 - Réglages › Zone de danger : « Supprimer toutes les données » (produits, stock, commandes, ventes, dépenses, clients, photos), avec résumé et double confirmation ; réglages et liaison Messenger conservés.
 - Bot intelligent : fautes de frappe tolérées (« kirarro », « tshirt »), réponses aux questions de prix, de disponibilité et de description (« ohatrinona ny kiraro ? », « vous avez des casquettes ? »), client fidèle reconnu (« Faly mahita anao indray », bouton et phrase « toy ny teo » pour recommander), suggestions selon ses achats, réponse polie aux remerciements.
