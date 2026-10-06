@@ -21,6 +21,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - run: npm install -g npm@11.6.2  # même npm qu'en local : le lock file en dépend
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
@@ -38,6 +39,7 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
+      - run: npm install -g npm@11.6.2  # même npm qu'en local : le lock file en dépend
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
