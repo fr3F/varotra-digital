@@ -14,6 +14,7 @@ import {
 import { notificationPreferencesStore, notificationService } from '@/services/notifications/notification.service';
 import { AppButton } from '@/shared/components/AppButton';
 import { ErrorBanner } from '@/shared/components/StatusViews';
+import { DangerZoneSection } from './DangerZoneSection';
 import { MessengerSettingsSection } from './MessengerSettingsSection';
 
 const PERMISSION_TEXTS: Readonly<Record<NotificationPermission, { title: string; message: string }>> = {
@@ -103,6 +104,8 @@ export function NotificationSettingsScreen() {
         ))}
       </View>
       {message !== null ? <Text style={styles.feedback}>{message}</Text> : null}
+
+      <DangerZoneSection />
     </ScrollView>
   );
 }

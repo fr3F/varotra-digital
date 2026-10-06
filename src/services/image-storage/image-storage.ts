@@ -29,6 +29,13 @@ export const imageStorage: ImageStorage = {
     return destination.uri;
   },
 
+  async removeAll() {
+    const directory = new Directory(Paths.document, IMAGES_DIRECTORY_NAME);
+    if (directory.exists) {
+      directory.delete();
+    }
+  },
+
   async remove(uri) {
     if (!imageStorage.isPersisted(uri)) {
       return;
