@@ -130,6 +130,11 @@ export const messengerApi = {
     await request(baseUrl, '/v1/devices/unpair', { method: 'POST', body: '{}', token });
   },
 
+  /** Jeton Expo Push du téléphone (null : plus de notification push). */
+  async setPushToken(baseUrl: string, token: string, pushToken: string | null): Promise<void> {
+    await request(baseUrl, '/v1/devices/push-token', { method: 'PUT', body: JSON.stringify({ pushToken }), token });
+  },
+
   async pushCatalog(baseUrl: string, token: string, products: readonly CatalogEntry[]): Promise<void> {
     await request(baseUrl, '/v1/catalog', { method: 'PUT', body: JSON.stringify({ products }), token });
   },
