@@ -1,7 +1,9 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors } from '@/core/theme/theme';
 import { EmptyState, LoadingView } from '@/shared/components/StatusViews';
+import { providersMessages } from './providers.messages';
 
 const LOCK_NAME = 'carnet-digital-database';
 
@@ -17,6 +19,7 @@ interface SingleTabGuardProps {
  * un autre onglet affiche un message et prend automatiquement le relais quand le premier se ferme.
  */
 export function SingleTabGuard({ children }: SingleTabGuardProps) {
+  const t = useMessages(providersMessages);
   const [status, setStatus] = useState<TabStatus>('checking');
 
   useEffect(() => {
@@ -61,10 +64,7 @@ export function SingleTabGuard({ children }: SingleTabGuardProps) {
   }
   return (
     <View style={styles.screen}>
-      <EmptyState
-        title="Carnet Digital est déjà ouvert dans un autre onglet"
-        message="Fermez l'autre onglet : cette page prendra le relais automatiquement."
-      />
+      <EmptyState title={t.otherTabTitle} message={t.otherTabMessage} />
     </View>
   );
 }

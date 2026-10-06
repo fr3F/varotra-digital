@@ -5,6 +5,8 @@ import { useStore } from '@/core/state/store';
 import { EntityId } from '@/models';
 import { productStore } from '@/services/product.service';
 import { AppButton } from '@/shared/components/AppButton';
+import { useMessages } from '@/core/i18n/i18n';
+import { productsMessages } from './products.messages';
 
 interface ProductStockCardProps {
   readonly productId: EntityId;
@@ -12,16 +14,17 @@ interface ProductStockCardProps {
 
 /** Quantité actuelle (toujours à jour via le store) et accès au module Stock. */
 export function ProductStockCard({ productId }: ProductStockCardProps) {
+  const t = useMessages(productsMessages);
   const product = useStore(productStore).items.find((item) => item.id === productId);
 
   return (
     <View style={styles.card}>
       <View style={styles.texts}>
-        <Text style={styles.label}>Quantité en stock</Text>
+        <Text style={styles.label}>{t.stockQuantity}</Text>
         <Text style={styles.quantity}>{product?.stockQuantity ?? '—'}</Text>
       </View>
       <AppButton
-        label="Gérer le stock"
+        label={t.manageStock}
         variant="secondary"
         onPress={() => router.push({ pathname: '/stock/[productId]', params: { productId } })}
       />

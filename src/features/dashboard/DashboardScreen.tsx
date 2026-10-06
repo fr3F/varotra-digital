@@ -6,7 +6,9 @@ import { Href, router, Stack, useFocusEffect } from 'expo-router';
 import { APP_NAME } from '@/core/constants/app.constants';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
-import { availableQuantity, EXPENSE_CATEGORY_LABELS, Period, PERIOD_LABELS, PERIODS } from '@/models';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
+import { availableQuantity, Period, PERIODS } from '@/models';
 import { dashboardService } from '@/services/dashboard.service';
 import { expensesVersion } from '@/services/expense.service';
 import { orderStore } from '@/services/order.service';
@@ -21,30 +23,37 @@ import { ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { useQuery } from '@/shared/hooks/useQuery';
 import { formatShortDay } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
+import { dashboardMessages } from './dashboard.messages';
+
+type ModuleKey = 'stock' | 'clients' | 'expenses' | 'sales' | 'orders' | 'products';
 
 interface ModuleTile {
-  readonly label: string;
+  readonly key: ModuleKey;
   readonly href: Href;
   readonly icon: ComponentProps<typeof Ionicons>['name'];
 }
 
 /** Accès rapides (les écrans principaux sont aussi dans la barre d'onglets). */
 const MODULES: readonly ModuleTile[] = [
-  { label: 'Stock', href: '/stock', icon: 'layers-outline' },
-  { label: 'Clients', href: '/clients', icon: 'people-outline' },
-  { label: 'Dépenses', href: '/expenses', icon: 'wallet-outline' },
-  { label: 'Ventes', href: '/sales', icon: 'cash-outline' },
-  { label: 'Commandes', href: '/orders', icon: 'receipt-outline' },
-  { label: 'Produits', href: '/products', icon: 'cube-outline' },
+  { key: 'stock', href: '/stock', icon: 'layers-outline' },
+  { key: 'clients', href: '/clients', icon: 'people-outline' },
+  { key: 'expenses', href: '/expenses', icon: 'wallet-outline' },
+  { key: 'sales', href: '/sales', icon: 'cash-outline' },
+  { key: 'orders', href: '/orders', icon: 'receipt-outline' },
+  { key: 'products', href: '/products', icon: 'cube-outline' },
 ];
-
-const PERIOD_OPTIONS: readonly ChipOption<Period>[] = PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }));
 
 /** Au-delà de cette largeur (tablette, web), les cartes passent sur 4 colonnes. */
 const WIDE_LAYOUT = 720;
 
 export function DashboardScreen() {
+  const t = useMessages(dashboardMessages);
+  const common = useMessages(commonMessages);
   const [period, setPeriod] = useState<Period>('TODAY');
+  const periodOptions = useMemo<readonly ChipOption<Period>[]>(
+    () => PERIODS.map((value) => ({ value, label: common.period[value] })),
+    [common],
+  );
   const { width } = useWindowDimensions();
   const basis = width >= WIDE_LAYOUT ? '22%' : '45%';
 
@@ -66,18 +75,18 @@ export function DashboardScreen() {
         key: day.day,
         label: formatShortDay(day.day),
         value: day.revenue,
-        detail: `bénéfice ${formatMoney(day.profit)} · ${day.salesCount} vente(s)`,
+        detail: t.dayDetail(formatMoney(day.profit), day.salesCount),
       })),
-    [data],
+    [data, t],
   );
   const expenseData = useMemo(
     () =>
       (data?.expensesByCategory ?? []).map((entry) => ({
         key: entry.category,
-        label: EXPENSE_CATEGORY_LABELS[entry.category],
+        label: common.expenseCategory[entry.category],
         value: entry.total,
       })),
-    [data],
+    [data, common],
   );
 
   return (
@@ -86,97 +95,89 @@ export function DashboardScreen() {
       contentContainerStyle={[styles.content, width >= WIDE_LAYOUT && styles.contentWide]}
       refreshControl={<RefreshControl refreshing={loading && data !== null} onRefresh={reload} />}
     >
-      <Stack.Screen
-        options={{
-          title: APP_NAME,
-          headerRight: () => (
-            <Pressable accessibilityRole="button" onPress={() => router.push('/settings')} hitSlop={12}>
-              <Text style={styles.headerLink}>Réglages</Text>
-            </Pressable>
-          ),
-        }}
-      />
+      {/* À droite de l'en-tête : menu des langues (défini pour tous les écrans dans les layouts). */}
+      <Stack.Screen options={{ title: APP_NAME }} />
       <ErrorBanner message={error} />
       {data === null ? (
         <LoadingView />
       ) : (
         <>
           <View style={styles.hero}>
-            <Text style={styles.heroLabel}>Chiffre d’affaires du jour</Text>
+            <Text style={styles.heroLabel}>{t.revenueToday}</Text>
             <Text style={styles.heroValue}>{formatMoney(data.revenueToday)}</Text>
-            <Text style={styles.heroCaption}>{data.salesTodayCount} vente(s) aujourd’hui</Text>
+            <Text style={styles.heroCaption}>{t.salesToday(data.salesTodayCount)}</Text>
             <View style={styles.heroActions}>
               <View style={styles.heroAction}>
                 {/* Boutons clairs : un bouton « primary » se confondrait avec le bandeau. */}
-                <AppButton label="Ventes" variant="secondary" onPress={() => router.push('/sales')} />
+                <AppButton label={common.tabs.sales} variant="secondary" onPress={() => router.push('/sales')} />
               </View>
               <View style={styles.heroAction}>
-                <AppButton label="Commandes" variant="secondary" onPress={() => router.push('/orders')} />
+                <AppButton label={common.tabs.orders} variant="secondary" onPress={() => router.push('/orders')} />
               </View>
             </View>
           </View>
 
-          <ChipGroup accessibilityLabel="Période" options={PERIOD_OPTIONS} selected={period} onSelect={setPeriod} />
+          <ChipGroup accessibilityLabel={t.period} options={periodOptions} selected={period} onSelect={setPeriod} />
 
           <View style={styles.grid}>
             <StatCard
               basis={basis}
-              label="Chiffre d’affaires"
+              label={t.revenue}
               value={formatMoney(data.revenue)}
-              caption={`${data.salesCount} vente(s)`}
+              caption={t.salesCount(data.salesCount)}
             />
             <StatCard
               basis={basis}
-              label="Bénéfice brut"
+              label={t.grossProfit}
               value={formatMoney(data.grossProfit)}
-              caption="ventes − prix d’achat"
+              caption={t.grossProfitCaption}
               tone={data.grossProfit < 0 ? 'negative' : 'positive'}
             />
-            <StatCard basis={basis} label="Dépenses" value={formatMoney(data.expenses)} />
+            <StatCard basis={basis} label={t.expenses} value={formatMoney(data.expenses)} />
             <StatCard
               basis={basis}
-              label="Bénéfice net"
+              label={t.netProfit}
               value={formatMoney(data.netProfit)}
-              caption="brut − dépenses"
+              caption={t.netProfitCaption}
               tone={data.netProfit < 0 ? 'negative' : 'positive'}
             />
             <StatCard
               basis={basis}
-              label="Commandes"
+              label={t.orders}
               value={String(data.ordersCreated)}
-              caption={`${data.openOrders} en cours`}
+              caption={t.openOrders(data.openOrders)}
               tone={data.openOrders > 0 ? 'warning' : 'default'}
             />
             <StatCard
               basis={basis}
-              label="Stock faible"
+              label={t.lowStock}
               value={String(data.lowStockCount)}
-              caption="produit(s) à réapprovisionner"
+              caption={t.lowStockCaption}
               tone={data.lowStockCount > 0 ? 'warning' : 'default'}
             />
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Chiffre d’affaires · 7 derniers jours</Text>
+            <Text style={styles.cardTitle}>{t.revenueChart}</Text>
             <ColumnChart data={chartData} formatValue={formatMoney} />
           </View>
 
           {expenseData.length > 0 ? (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Dépenses par catégorie · {PERIOD_LABELS[period]}</Text>
+              <Text style={styles.cardTitle}>{t.expensesByCategory(common.period[period])}</Text>
               <BarList data={expenseData} formatValue={formatMoney} />
             </View>
           ) : null}
 
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Produits en stock faible</Text>
+              <Text style={styles.cardTitle}>{t.lowStockProducts}</Text>
               <Text accessibilityRole="link" onPress={() => router.push('/stock')} style={styles.link}>
-                Voir le stock
+                {t.seeStock}
               </Text>
             </View>
             {data.lowStockProducts.length === 0 ? (
-              <Text style={styles.muted}>Tous les produits sont au-dessus de leur seuil d’alerte.</Text>
+              <Text style={styles.muted}>{t.allAboveThreshold}</Text>
             ) : (
               data.lowStockProducts.map((product) => {
                 const available = availableQuantity(product);
@@ -191,7 +192,7 @@ export function DashboardScreen() {
                       {product.name}
                     </Text>
                     <Text style={[styles.stockQty, available === 0 && styles.stockOut]}>
-                      {available === 0 ? 'Rupture' : `${available} / seuil ${product.alertThreshold}`}
+                      {available === 0 ? t.outOfStock : t.stockOverThreshold(available, product.alertThreshold)}
                     </Text>
                   </Pressable>
                 );
@@ -199,11 +200,11 @@ export function DashboardScreen() {
             )}
           </View>
 
-          <Text style={styles.sectionTitle}>Accès rapide</Text>
+          <Text style={styles.sectionTitle}>{t.quickAccess}</Text>
           <View style={styles.grid}>
             {MODULES.map((module) => (
               <Pressable
-                key={module.label}
+                key={module.key}
                 accessibilityRole="button"
                 onPress={() => router.push(module.href)}
                 style={({ pressed }) => [styles.tile, { flexBasis: width >= WIDE_LAYOUT ? '15%' : '30%' }, pressed && styles.tilePressed]}
@@ -211,7 +212,7 @@ export function DashboardScreen() {
                 <View style={styles.tileIcon}>
                   <Ionicons name={module.icon} size={24} color={colors.primary} />
                 </View>
-                <Text style={styles.tileLabel}>{module.label}</Text>
+                <Text style={styles.tileLabel}>{t.modules[module.key]}</Text>
               </Pressable>
             ))}
           </View>
@@ -225,7 +226,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
   contentWide: { maxWidth: 1100, width: '100%', alignSelf: 'center' },
-  headerLink: { color: colors.onPrimary, fontWeight: '600', fontSize: fontSize.md, paddingHorizontal: spacing.sm },
   hero: { padding: spacing.xl, borderRadius: radius.lg, backgroundColor: colors.primary },
   heroLabel: { color: colors.primaryLight, fontSize: fontSize.md },
   heroValue: { color: colors.onPrimary, fontSize: 34, fontWeight: '800', fontVariant: ['tabular-nums'] },

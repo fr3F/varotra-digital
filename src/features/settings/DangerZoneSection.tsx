@@ -1,62 +1,50 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { resetService } from '@/services/reset.service';
 import { AppButton } from '@/shared/components/AppButton';
 import { ErrorBanner } from '@/shared/components/StatusViews';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
 import { confirmAction } from '@/shared/utils/confirm';
+import { settingsMessages } from './settings.messages';
 
 /** Réglages › Zone de danger : suppression de toutes les données, avec double confirmation. */
 export function DangerZoneSection() {
+  const t = useMessages(settingsMessages).danger;
+  const common = useMessages(commonMessages);
   const { busy, error, run } = useAsyncAction();
   const [message, setMessage] = useState<string | null>(null);
 
   const deleteAll = async () => {
     setMessage(null);
     const summary = await resetService.summary();
-    const details = [
-      `${summary.products} produit(s)`,
-      `${summary.orders} commande(s)`,
-      `${summary.sales} vente(s)`,
-      `${summary.clients} client(s)`,
-      `${summary.expenses} dépense(s)`,
-    ].join(', ');
-    const first = await confirmAction(
-      'Supprimer toutes les données ?',
-      `Seront supprimés : ${details}, ainsi que le stock, l’historique et les photos des produits.`,
-      'Continuer',
-    );
+    const details = t.summary(summary.products, summary.orders, summary.sales, summary.clients, summary.expenses);
+    const first = await confirmAction(t.firstTitle, t.firstMessage(details), common.actions.continue);
     if (!first) {
       return;
     }
-    const second = await confirmAction(
-      'Dernière confirmation',
-      'Cette action est définitive : les données ne pourront pas être récupérées.',
-      'Tout supprimer',
-    );
+    const second = await confirmAction(t.secondTitle, t.secondMessage, t.deleteAll);
     if (!second) {
       return;
     }
     const done = await run(() => resetService.deleteAllData());
     if (done) {
-      setMessage('Toutes les données ont été supprimées.');
+      setMessage(t.done);
     }
   };
 
   return (
     <View style={styles.section}>
-      <Text style={styles.title}>Zone de danger</Text>
+      <Text style={styles.title}>{t.title}</Text>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Supprimer toutes les données</Text>
-        <Text style={styles.muted}>
-          Produits, stock, commandes, ventes, dépenses, clients et photos. Les réglages et la liaison Messenger sont
-          conservés.
-        </Text>
+        <Text style={styles.cardTitle}>{t.cardTitle}</Text>
+        <Text style={styles.muted}>{t.description}</Text>
         <ErrorBanner message={error} />
         {message !== null ? <Text style={styles.done}>{message}</Text> : null}
         <View style={styles.spaced}>
-          <AppButton label="Supprimer toutes les données" variant="danger" onPress={() => void deleteAll()} loading={busy} />
+          <AppButton label={t.cardTitle} variant="danger" onPress={() => void deleteAll()} loading={busy} />
         </View>
       </View>
     </View>

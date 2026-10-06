@@ -2,7 +2,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { StockMovement } from '@/models';
 import { formatDisplayDateTime } from '@/utils/date.utils';
-import { formatDelta, MOVEMENT_ORIGIN_LABELS, MOVEMENT_TYPE_COLORS, MOVEMENT_TYPE_LABELS } from './stock-labels';
+import { formatDelta, MOVEMENT_ORIGIN_LABELS, MOVEMENT_TYPE_COLORS } from './stock-labels';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
+import { stockMessages } from './stock.messages';
 
 interface MovementRowProps {
   readonly movement: StockMovement;
@@ -11,17 +14,20 @@ interface MovementRowProps {
 }
 
 export function MovementRow({ movement, productName }: MovementRowProps) {
+  const t = useMessages(stockMessages);
+  const common = useMessages(commonMessages);
   const palette = MOVEMENT_TYPE_COLORS[movement.type];
+  // Le motif enregistré par défaut est le libellé français de l'origine : on ne le répète pas.
   const details = [
     formatDisplayDateTime(movement.createdAt),
-    movement.origin !== 'MANUAL' ? MOVEMENT_ORIGIN_LABELS[movement.origin] : null,
+    movement.origin !== 'MANUAL' ? t.origin[movement.origin] : null,
     movement.reason !== MOVEMENT_ORIGIN_LABELS[movement.origin] ? movement.reason : null,
   ].filter((part): part is string => part !== null && part.length > 0);
 
   return (
     <View style={styles.row}>
       <View style={[styles.badge, { backgroundColor: palette.background }]}>
-        <Text style={[styles.badgeText, { color: palette.text }]}>{MOVEMENT_TYPE_LABELS[movement.type]}</Text>
+        <Text style={[styles.badgeText, { color: palette.text }]}>{common.movementType[movement.type]}</Text>
       </View>
       <View style={styles.texts}>
         {productName !== undefined ? (
@@ -35,7 +41,7 @@ export function MovementRow({ movement, productName }: MovementRowProps) {
       </View>
       <View style={styles.amounts}>
         <Text
-          accessibilityLabel={`Variation ${formatDelta(movement.quantityDelta)}`}
+          accessibilityLabel={t.variation(formatDelta(movement.quantityDelta))}
           style={[styles.delta, { color: palette.text }]}
         >
           {formatDelta(movement.quantityDelta)}

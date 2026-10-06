@@ -2,35 +2,22 @@ import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Stack, useFocusEffect } from 'expo-router';
 import { toErrorMessage } from '@/core/errors/app-error';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
-import {
-  NOTIFICATION_TYPE_DESCRIPTIONS,
-  NOTIFICATION_TYPE_LABELS,
-  NOTIFICATION_TYPES,
-  NotificationPermission,
-  NotificationType,
-} from '@/models';
+import { NOTIFICATION_TYPES, NotificationPermission, NotificationType } from '@/models';
 import { notificationPreferencesStore, notificationService } from '@/services/notifications/notification.service';
 import { AppButton } from '@/shared/components/AppButton';
 import { ErrorBanner } from '@/shared/components/StatusViews';
 import { DangerZoneSection } from './DangerZoneSection';
+import { LanguageSection } from './LanguageSection';
 import { MessengerSettingsSection } from './MessengerSettingsSection';
-
-const PERMISSION_TEXTS: Readonly<Record<NotificationPermission, { title: string; message: string }>> = {
-  granted: { title: 'Notifications autorisées', message: 'Carnet Digital peut vous prévenir sur cet appareil.' },
-  undetermined: {
-    title: 'Autorisation pas encore demandée',
-    message: 'Autorisez les notifications pour être prévenu des commandes et du stock.',
-  },
-  denied: {
-    title: 'Notifications bloquées',
-    message: 'Réactivez-les dans les paramètres du téléphone (Applications › Carnet Digital › Notifications).',
-  },
-  unsupported: { title: 'Non disponible', message: 'Ce navigateur ne gère pas les notifications.' },
-};
+import { settingsMessages } from './settings.messages';
 
 export function NotificationSettingsScreen() {
+  const t = useMessages(settingsMessages);
+  const common = useMessages(commonMessages);
   const preferences = useStore(notificationPreferencesStore);
   const [permission, setPermission] = useState<NotificationPermission | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -60,16 +47,17 @@ export function NotificationSettingsScreen() {
     setMessage(null);
     const sent = await notificationService.sendTest(type);
     setPermission(await notificationService.getPermission());
-    setMessage(sent ? 'Notification de test envoyée.' : 'Impossible d’envoyer : les notifications ne sont pas autorisées.');
+    setMessage(sent ? t.testSent : t.testFailed);
   };
 
-  const permissionText = permission === null ? null : PERMISSION_TEXTS[permission];
+  const permissionText = permission === null ? null : t.permission[permission];
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: 'Réglages' }} />
+      <Stack.Screen options={{ title: t.title }} />
+      <LanguageSection />
       <MessengerSettingsSection />
-      <Text style={styles.sectionTitle}>Notifications</Text>
+      <Text style={styles.sectionTitle}>{t.notifications}</Text>
       <ErrorBanner message={error} />
       {permissionText !== null ? (
         <View style={[styles.card, permission === 'granted' ? styles.okCard : styles.warnCard]}>
@@ -77,25 +65,25 @@ export function NotificationSettingsScreen() {
           <Text style={styles.muted}>{permissionText.message}</Text>
           {permission === 'undetermined' ? (
             <View style={styles.spaced}>
-              <AppButton label="Autoriser les notifications" onPress={() => void request()} />
+              <AppButton label={t.allowNotifications} onPress={() => void request()} />
             </View>
           ) : null}
         </View>
       ) : null}
 
-      <Text style={styles.sectionTitle}>Me prévenir pour…</Text>
+      <Text style={styles.sectionTitle}>{t.notifyMeFor}</Text>
       <View style={styles.list}>
         {NOTIFICATION_TYPES.map((type) => (
           <View key={type} style={styles.row}>
             <View style={styles.rowTexts}>
-              <Text style={styles.rowTitle}>{NOTIFICATION_TYPE_LABELS[type]}</Text>
-              <Text style={styles.muted}>{NOTIFICATION_TYPE_DESCRIPTIONS[type]}</Text>
+              <Text style={styles.rowTitle}>{common.notificationType[type]}</Text>
+              <Text style={styles.muted}>{common.notificationDescription[type]}</Text>
               <Text accessibilityRole="button" onPress={() => void test(type)} style={styles.testLink}>
-                Envoyer un test
+                {t.sendTest}
               </Text>
             </View>
             <Switch
-              accessibilityLabel={NOTIFICATION_TYPE_LABELS[type]}
+              accessibilityLabel={common.notificationType[type]}
               value={preferences[type]}
               onValueChange={(enabled) => void toggle(type, enabled)}
               trackColor={{ true: colors.primary, false: colors.border }}

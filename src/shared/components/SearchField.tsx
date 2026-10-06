@@ -1,6 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 
 interface SearchFieldProps {
   readonly value: string;
@@ -11,6 +13,7 @@ interface SearchFieldProps {
 
 /** Champ de recherche en pilule : loupe à gauche, croix pour effacer. */
 export function SearchField({ value, onChangeText, placeholder, accessibilityLabel }: SearchFieldProps) {
+  const common = useMessages(commonMessages);
   return (
     <View style={styles.field}>
       <Ionicons name="search" size={20} color={colors.textMuted} />
@@ -25,7 +28,7 @@ export function SearchField({ value, onChangeText, placeholder, accessibilityLab
         returnKeyType="search"
       />
       {value.length > 0 ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Effacer la recherche" onPress={() => onChangeText('')} hitSlop={12}>
+        <Pressable accessibilityRole="button" accessibilityLabel={common.actions.clearSearch} onPress={() => onChangeText('')} hitSlop={12}>
           <Ionicons name="close-circle" size={20} color={colors.textMuted} />
         </Pressable>
       ) : null}

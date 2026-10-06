@@ -11,9 +11,10 @@ import { Thumbnail } from '@/shared/components/Thumbnail';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { formatMoney } from '@/utils/money.utils';
 import { MovementRow } from './MovementRow';
-import { STOCK_LEVEL_LABELS } from './stock-labels';
 import { StockMovementForm } from './StockMovementForm';
 import { useStockHistory } from './useStockHistory';
+import { useMessages } from '@/core/i18n/i18n';
+import { stockMessages } from './stock.messages';
 
 const LEVEL_COLORS = { OUT: colors.danger, LOW: colors.warning, OK: colors.success } as const;
 
@@ -22,6 +23,7 @@ interface StockDetailScreenProps {
 }
 
 export function StockDetailScreen({ productId }: StockDetailScreenProps) {
+  const t = useMessages(stockMessages);
   const productState = useStore(productStore);
   const product = productState.items.find((item) => item.id === productId) ?? null;
 
@@ -36,7 +38,7 @@ export function StockDetailScreen({ productId }: StockDetailScreenProps) {
 
   if (product === null) {
     if (productState.status === 'ready') {
-      return <EmptyState title="Produit introuvable" message="Il a peut-être été supprimé." />;
+      return <EmptyState icon="help-circle-outline" title={t.productNotFound} message={t.productNotFoundHint} />;
     }
     return productState.error !== null ? <ErrorBanner message={productState.error} /> : <LoadingView />;
   }
@@ -52,29 +54,29 @@ export function StockDetailScreen({ productId }: StockDetailScreenProps) {
             {product.name}
           </Text>
           <Text style={[styles.level, { color: LEVEL_COLORS[level] }]}>
-            {STOCK_LEVEL_LABELS[level]} · seuil d’alerte {product.alertThreshold}
+            {t.levelWithThreshold(t.level[level], product.alertThreshold)}
           </Text>
           {product.reservedQuantity > 0 ? (
             <Text style={styles.value}>
-              {product.reservedQuantity} réservé(s) · {availableQuantity(product)} disponible(s)
+              {t.reservedAvailable(product.reservedQuantity, availableQuantity(product))}
             </Text>
           ) : null}
-          <Text style={styles.value}>Valeur : {formatMoney(product.stockQuantity * product.costPrice)} (achat)</Text>
+          <Text style={styles.value}>{t.value(formatMoney(product.stockQuantity * product.costPrice))}</Text>
         </View>
         <View style={styles.quantityBox}>
-          <Text accessibilityLabel={`Quantité actuelle : ${product.stockQuantity}`} style={styles.quantity}>
+          <Text accessibilityLabel={t.currentQuantity(product.stockQuantity)} style={styles.quantity}>
             {product.stockQuantity}
           </Text>
-          <Text style={styles.quantityLabel}>en stock</Text>
+          <Text style={styles.quantityLabel}>{t.inStock}</Text>
         </View>
       </View>
 
       <StockMovementForm product={product} />
 
       <View style={styles.historyHeader}>
-        <Text style={styles.sectionTitle}>Historique des mouvements</Text>
+        <Text style={styles.sectionTitle}>{t.history}</Text>
         <AppButton
-          label="Fiche produit"
+          label={t.productSheet}
           variant="secondary"
           onPress={() => router.push({ pathname: '/products/[id]', params: { id: product.id } })}
         />
@@ -85,14 +87,14 @@ export function StockDetailScreen({ productId }: StockDetailScreenProps) {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: `Stock · ${product.name}` }} />
+      <Stack.Screen options={{ title: t.titleFor(product.name) }} />
       <FlatList
         data={history.items}
         keyExtractor={(movement) => movement.id}
         renderItem={({ item }) => <MovementRow movement={item} />}
         ListHeaderComponent={header}
         ListEmptyComponent={
-          history.loading ? null : <EmptyState title="Aucun mouvement" message="Les entrées et sorties apparaîtront ici." />
+          history.loading ? null : <EmptyState icon="swap-vertical-outline" title={t.noMovement} message={t.noMovementProductHint} />
         }
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}

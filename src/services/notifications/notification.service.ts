@@ -1,3 +1,4 @@
+import { messagesOf } from '@/core/i18n/i18n';
 import { createStore } from '@/core/state/store';
 import { database } from '@/database/database';
 import { settingsRepository } from '@/database/repositories/settings.repository';
@@ -14,6 +15,7 @@ import {
 } from '@/models';
 import { formatMoney } from '@/utils/money.utils';
 import { notificationCenter } from './notification-center';
+import { notificationsMessages } from './notifications.messages';
 
 const PREFERENCE_PREFIX = 'notifications.';
 
@@ -98,28 +100,30 @@ export const notificationService = {
     if (fromMessenger && remotePushActive) {
       return;
     }
+    const t = messagesOf(notificationsMessages);
     const check = !fromMessenger
       ? ''
       : order.needsReview
-        ? ' · à vérifier'
+        ? t.reviewSuffix
         : order.stockCheck === 'SHORTAGE'
-          ? ' · ⚠️ stock insuffisant'
+          ? t.shortageSuffix
           : order.stockCheck === 'OK'
-            ? ' · stock OK'
+            ? t.stockOkSuffix
             : '';
     queue({
       type: 'NEW_ORDER',
-      title: fromMessenger ? 'Nouvelle commande Messenger' : 'Nouvelle commande',
+      title: fromMessenger ? t.newMessengerOrder : t.newOrder,
       body: `${orderTitle(order, clientName)} — ${formatMoney(order.totalAmount)}${check}`,
       target: { screen: 'order', id: order.id },
     });
   },
 
   notifyOrderCompleted(order: Order, clientName: string | null): void {
+    const t = messagesOf(notificationsMessages);
     queue({
       type: 'ORDER_COMPLETED',
-      title: 'Commande livrée',
-      body: `${orderTitle(order, clientName)} — ${formatMoney(order.totalAmount)} encaissés`,
+      title: t.orderDelivered,
+      body: `${orderTitle(order, clientName)} — ${t.collected(formatMoney(order.totalAmount))}`,
       target: { screen: 'order', id: order.id },
     });
   },
@@ -135,13 +139,14 @@ export const notificationService = {
     if (!crossedThreshold && !becameOut) {
       return;
     }
+    const t = messagesOf(notificationsMessages);
     queue({
       type: 'LOW_STOCK',
-      title: available === 0 ? 'Rupture de stock' : 'Stock faible',
+      title: available === 0 ? t.outOfStock : t.lowStock,
       body:
         available === 0
-          ? `${product.name} n’est plus disponible.`
-          : `${product.name} : ${available} disponible(s), seuil d’alerte ${product.alertThreshold}.`,
+          ? t.noLongerAvailable(product.name)
+          : t.lowStockBody(product.name, available, product.alertThreshold),
       target: { screen: 'stock', id: product.id },
     });
   },
@@ -150,7 +155,7 @@ export const notificationService = {
   notifySyncError(details: string): void {
     queue({
       type: 'SYNC_ERROR',
-      title: 'Échec de la synchronisation',
+      title: messagesOf(notificationsMessages).syncFailed,
       body: details,
       target: { screen: 'dashboard' },
     });
@@ -167,8 +172,8 @@ export const notificationService = {
     }
     await notificationCenter.show({
       type,
-      title: 'Test : notification',
-      body: 'Les notifications de Carnet Digital fonctionnent sur cet appareil.',
+      title: messagesOf(notificationsMessages).testTitle,
+      body: messagesOf(notificationsMessages).testBody,
       target: { screen: 'dashboard' },
     });
     return true;

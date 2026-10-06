@@ -2,8 +2,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, shadow, spacing } from '@/core/theme/theme';
-import { ORDER_STATUS_LABELS, ORDER_STATUSES, OrderStatus, OrderSummary } from '@/models';
+import { ORDER_STATUSES, OrderStatus, OrderSummary } from '@/models';
 import { orderService } from '@/services/order.service';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
 import { SearchField } from '@/shared/components/SearchField';
@@ -11,11 +13,14 @@ import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/Status
 import { formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
 import { MessengerBadges } from './MessengerBadges';
+import { ordersMessages } from './orders.messages';
 import { OrderStatusBadge } from './OrderStatusBadge';
 import { useOrders } from './useOrders';
 
 function OrderRow({ summary }: { readonly summary: OrderSummary }) {
   const { order, clientName, itemCount } = summary;
+  const t = useMessages(ordersMessages);
+  const { noClient } = useMessages(commonMessages);
   return (
     <Pressable
       accessibilityRole="button"
@@ -25,7 +30,7 @@ function OrderRow({ summary }: { readonly summary: OrderSummary }) {
       <View style={styles.rowMain}>
         <View style={styles.rowTop}>
           <Text style={styles.client} numberOfLines={1}>
-            {clientName ?? 'Client non renseigné'}
+            {clientName ?? noClient}
           </Text>
           <Text style={styles.total}>{formatMoney(order.totalAmount)}</Text>
         </View>
@@ -34,7 +39,7 @@ function OrderRow({ summary }: { readonly summary: OrderSummary }) {
           <MessengerBadges order={order} />
         </View>
         <Text style={styles.meta}>
-          {order.reference} · {formatDisplayDateTime(order.orderedAt)} · {itemCount} produit(s)
+          {order.reference} · {formatDisplayDateTime(order.orderedAt)} · {t.productCount(itemCount)}
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -46,6 +51,8 @@ export function OrderListScreen() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<OrderStatus | null>(null);
   const { orders, countsByStatus, totalCount, loading, error, reload } = useOrders({ search, status });
+  const t = useMessages(ordersMessages);
+  const { orderStatus } = useMessages(commonMessages);
 
   // Le nom d'un client a pu changer depuis un autre écran.
   useFocusEffect(
@@ -56,22 +63,22 @@ export function OrderListScreen() {
 
   const statusOptions = useMemo<readonly ChipOption<OrderStatus | null>[]>(
     () => [
-      { value: null, label: `Toutes (${totalCount})` },
+      { value: null, label: t.allCount(totalCount) },
       ...ORDER_STATUSES.map((value) => ({
         value,
-        label: `${ORDER_STATUS_LABELS[value]} (${countsByStatus.get(value) ?? 0})`,
+        label: t.statusCount(orderStatus[value], countsByStatus.get(value) ?? 0),
       })),
     ],
-    [countsByStatus, totalCount],
+    [countsByStatus, totalCount, t, orderStatus],
   );
   const isFiltered = search.trim().length > 0 || status !== null;
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Commandes' }} />
+      <Stack.Screen options={{ title: t.title }} />
       <View style={styles.toolbar}>
-        <SearchField accessibilityLabel="Rechercher une commande" value={search} onChangeText={setSearch} placeholder="Rechercher (référence, client)" />
-        <ChipGroup accessibilityLabel="Filtrer par statut" options={statusOptions} selected={status} onSelect={setStatus} />
+        <SearchField accessibilityLabel={t.searchLabel} value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder} />
+        <ChipGroup accessibilityLabel={t.filterByStatus} options={statusOptions} selected={status} onSelect={setStatus} />
         <ErrorBanner message={error} />
       </View>
 
@@ -88,8 +95,8 @@ export function OrderListScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="receipt-outline"
-              title={isFiltered ? 'Aucune commande trouvée' : 'Aucune commande'}
-              message={isFiltered ? undefined : 'Les commandes reçues sur Messenger apparaissent ici automatiquement.'}
+              title={isFiltered ? t.notFound : t.empty}
+              message={isFiltered ? undefined : t.emptyMessage}
             />
           }
         />

@@ -11,6 +11,8 @@ import { toErrorMessage } from '@/core/errors/app-error';
 import { colors, fontSize, spacing } from '@/core/theme/theme';
 import { AppButton } from '@/shared/components/AppButton';
 import { Thumbnail } from '@/shared/components/Thumbnail';
+import { useMessages } from '@/core/i18n/i18n';
+import { productsMessages } from './products.messages';
 
 interface ProductImagePickerProps {
   readonly productName: string;
@@ -37,6 +39,7 @@ function firstUri(result: ImagePickerResult): string | null {
  * L'URI renvoyée est temporaire : le service produit la copie dans le stockage de l'app à l'enregistrement.
  */
 export function ProductImagePicker({ productName, imageUri, onChange, disabled = false }: ProductImagePickerProps) {
+  const t = useMessages(productsMessages);
   const [error, setError] = useState<string | null>(null);
   const canUseCamera = Platform.OS !== 'web';
 
@@ -46,7 +49,7 @@ export function ProductImagePicker({ productName, imageUri, onChange, disabled =
       if (source === 'camera') {
         const permission = await requestCameraPermissionsAsync();
         if (!permission.granted) {
-          setError("L'accès à l'appareil photo a été refusé.");
+          setError(t.cameraDenied);
           return;
         }
       }
@@ -65,21 +68,21 @@ export function ProductImagePicker({ productName, imageUri, onChange, disabled =
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Image</Text>
+      <Text style={styles.label}>{t.image}</Text>
       <View style={styles.row}>
         <Thumbnail name={productName} imageUri={hasImage ? imageUri : null} size={96} />
         <View style={styles.actions}>
           <AppButton
-            label={hasImage ? "Changer l'image" : 'Choisir une image'}
+            label={hasImage ? t.changeImage : t.chooseImage}
             variant="secondary"
             onPress={() => void pick('library')}
             disabled={disabled}
           />
           {canUseCamera ? (
-            <AppButton label="Prendre une photo" variant="secondary" onPress={() => void pick('camera')} disabled={disabled} />
+            <AppButton label={t.takePhoto} variant="secondary" onPress={() => void pick('camera')} disabled={disabled} />
           ) : null}
           {hasImage ? (
-            <AppButton label="Retirer l'image" variant="secondary" onPress={() => onChange('')} disabled={disabled} />
+            <AppButton label={t.removeImage} variant="secondary" onPress={() => onChange('')} disabled={disabled} />
           ) : null}
         </View>
       </View>

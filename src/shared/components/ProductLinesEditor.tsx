@@ -7,6 +7,8 @@ import { formatMoney } from '@/utils/money.utils';
 import { AppButton } from './AppButton';
 import { SelectionModal } from './SelectionModal';
 import { Thumbnail } from './Thumbnail';
+import { useMessages } from '@/core/i18n/i18n';
+import { sharedMessages } from '../shared.messages';
 
 interface ProductLinesEditorProps {
   readonly lines: readonly ProductLineFormValue[];
@@ -33,12 +35,13 @@ function Stepper({
   readonly onChange: (value: string) => void;
   readonly disabled: boolean;
 }) {
+  const t = useMessages(sharedMessages);
   const current = parseQuantity(value) ?? 0;
   return (
     <View style={styles.stepper}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Diminuer ${label}`}
+        accessibilityLabel={t.decrease(label)}
         disabled={disabled || current <= 1}
         onPress={() => onChange(String(current - 1))}
         style={[styles.stepButton, (disabled || current <= 1) && styles.stepDisabled]}
@@ -55,7 +58,7 @@ function Stepper({
       />
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Augmenter ${label}`}
+        accessibilityLabel={t.increase(label)}
         disabled={disabled}
         onPress={() => onChange(String(current + 1))}
         style={[styles.stepButton, disabled && styles.stepDisabled]}
@@ -75,6 +78,7 @@ export function ProductLinesEditor({
   stockMode = 'warn',
   showMargin = false,
 }: ProductLinesEditorProps) {
+  const t = useMessages(sharedMessages);
   const [pickerVisible, setPickerVisible] = useState(false);
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
 
@@ -84,12 +88,12 @@ export function ProductLinesEditor({
   return (
     <View style={styles.container}>
       <Text style={styles.label}>
-        Produits <Text style={styles.required}>*</Text>
+        {t.products} <Text style={styles.required}>*</Text>
       </Text>
 
       {lines.map((line) => {
         const product = productsById.get(line.productId);
-        const name = product?.name ?? 'Produit supprimé';
+        const name = product?.name ?? t.deletedProduct;
         const quantity = parseQuantity(line.quantity);
         const available = product === undefined ? 0 : availableQuantity(product);
         const lineTotal = previewLineTotal(line);
@@ -112,30 +116,30 @@ export function ProductLinesEditor({
                     shortage && (stockMode === 'strict' ? styles.availableError : styles.availableWarning),
                   ]}
                 >
-                  {shortage ? `Stock disponible insuffisant : ${available}` : `Disponible : ${available}`}
+                  {shortage ? t.insufficientStock(available) : t.available(available)}
                 </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Retirer ${name}`}
+                accessibilityLabel={t.removeLabel(name)}
                 disabled={disabled}
                 hitSlop={8}
                 onPress={() => onChange(lines.filter((candidate) => candidate.productId !== line.productId))}
               >
-                <Text style={styles.remove}>Retirer</Text>
+                <Text style={styles.remove}>{t.remove}</Text>
               </Pressable>
             </View>
             <View style={styles.lineFields}>
               <Stepper
-                label={`Quantité de ${name}`}
+                label={t.quantityOf(name)}
                 value={line.quantity}
                 onChange={(value) => updateLine(line.productId, { quantity: value })}
                 disabled={disabled}
               />
               <View style={styles.priceBox}>
-                <Text style={styles.priceLabel}>Prix unitaire (Ar)</Text>
+                <Text style={styles.priceLabel}>{t.unitPrice}</Text>
                 <TextInput
-                  accessibilityLabel={`Prix de ${name}`}
+                  accessibilityLabel={t.priceOf(name)}
                   value={line.unitPrice}
                   onChangeText={(value) => updateLine(line.productId, { unitPrice: value })}
                   keyboardType="number-pad"
@@ -146,7 +150,7 @@ export function ProductLinesEditor({
             </View>
             <View style={styles.lineFooter}>
               {margin !== null ? (
-                <Text style={[styles.margin, margin < 0 && styles.marginNegative]}>Marge : {formatMoney(margin)}</Text>
+                <Text style={[styles.margin, margin < 0 && styles.marginNegative]}>{t.margin(formatMoney(margin))}</Text>
               ) : (
                 <View />
               )}
@@ -157,7 +161,7 @@ export function ProductLinesEditor({
       })}
 
       <AppButton
-        label="+ Ajouter un produit"
+        label={t.addProduct}
         variant="secondary"
         onPress={() => setPickerVisible(true)}
         disabled={disabled}
@@ -165,11 +169,11 @@ export function ProductLinesEditor({
 
       <SelectionModal
         visible={pickerVisible}
-        title="Choisir un produit"
+        title={t.chooseProduct}
         items={products}
         keyOf={(product) => product.id}
         searchTextOf={(product) => `${product.name} ${product.sku ?? ''} ${product.category ?? ''}`}
-        emptyMessage="Aucun produit : créez-en un dans le module Produits."
+        emptyMessage={t.noProducts}
         onClose={() => setPickerVisible(false)}
         onSelect={(product) => {
           onChange(addProductLine(lines, product));
@@ -181,7 +185,7 @@ export function ProductLinesEditor({
             <View style={styles.lineTitle}>
               <Text style={styles.productName}>{product.name}</Text>
               <Text style={styles.available}>
-                {formatMoney(product.unitPrice)} · disponible : {availableQuantity(product)}
+                {t.priceAndAvailable(formatMoney(product.unitPrice), availableQuantity(product))}
               </Text>
             </View>
           </View>

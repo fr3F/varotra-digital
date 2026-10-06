@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing } from '@/core/theme/theme';
+import { useMessages } from '@/core/i18n/i18n';
 import { Order } from '@/models';
+import { ordersMessages } from './orders.messages';
 
 function Badge({ label, text, background }: { readonly label: string; readonly text: string; readonly background: string }) {
   return (
@@ -15,16 +17,17 @@ function Badge({ label, text, background }: { readonly label: string; readonly t
  * Le texte porte l'information : la couleur n'est qu'un repère.
  */
 export function MessengerBadges({ order }: { readonly order: Order }) {
+  const t = useMessages(ordersMessages);
   if (order.source !== 'MESSENGER') {
     return null;
   }
   return (
     <View style={styles.row}>
-      <Badge label="Messenger" text={colors.info} background={colors.infoLight} />
-      {order.needsReview ? <Badge label="À vérifier" text={colors.danger} background={colors.dangerLight} /> : null}
-      {order.stockCheck === 'OK' ? <Badge label="Stock OK" text={colors.success} background={colors.successLight} /> : null}
+      <Badge label={t.badgeMessenger} text={colors.info} background={colors.infoLight} />
+      {order.needsReview ? <Badge label={t.badgeReview} text={colors.danger} background={colors.dangerLight} /> : null}
+      {order.stockCheck === 'OK' ? <Badge label={t.badgeStockOk} text={colors.success} background={colors.successLight} /> : null}
       {order.stockCheck === 'SHORTAGE' ? (
-        <Badge label="Stock insuffisant" text={colors.warning} background={colors.warningLight} />
+        <Badge label={t.badgeShortage} text={colors.warning} background={colors.warningLight} />
       ) : null}
     </View>
   );

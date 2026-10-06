@@ -3,6 +3,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
+import { LanguageMenu } from '@/core/i18n/LanguageMenu';
 import { useStore } from '@/core/state/store';
 import { colors, fontSize, radius, shadow, spacing } from '@/core/theme/theme';
 import { orderStore } from '@/services/order.service';
@@ -19,6 +22,7 @@ function icon(name: IconName, focusedName: IconName) {
 /** Barre d'onglets rouge en pilule (modèle « Bite ») ; pastille = commandes nouvelles à traiter. */
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { tabs } = useMessages(commonMessages);
   const orders = useStore(orderStore);
   const newOrders = orders.items.filter((summary) => summary.order.status === 'NEW').length;
 
@@ -30,6 +34,8 @@ export default function TabsLayout() {
         headerTitleAlign: 'left',
         headerTitleStyle: { fontSize: fontSize.xl, fontWeight: '800', color: colors.text },
         headerTintColor: colors.primary,
+        // Choix de la langue (🇲🇬 / 🇫🇷 / 🇬🇧) depuis tous les écrans principaux.
+        headerRight: () => <LanguageMenu />,
         sceneStyle: { backgroundColor: colors.background },
         tabBarShowLabel: false,
         tabBarActiveTintColor: colors.onPrimary,
@@ -48,18 +54,18 @@ export default function TabsLayout() {
         tabBarBadgeStyle: { backgroundColor: colors.accent, color: colors.text, fontWeight: '700' },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Accueil', tabBarIcon: icon('home-outline', 'home') }} />
+      <Tabs.Screen name="index" options={{ title: tabs.home, tabBarIcon: icon('home-outline', 'home') }} />
       <Tabs.Screen
         name="orders"
         options={{
-          title: 'Commandes',
+          title: tabs.orders,
           tabBarIcon: icon('receipt-outline', 'receipt'),
           tabBarBadge: newOrders > 0 ? newOrders : undefined,
         }}
       />
-      <Tabs.Screen name="products" options={{ title: 'Produits', tabBarIcon: icon('cube-outline', 'cube') }} />
-      <Tabs.Screen name="sales" options={{ title: 'Ventes', tabBarIcon: icon('cash-outline', 'cash') }} />
-      <Tabs.Screen name="settings" options={{ title: 'Réglages', tabBarIcon: icon('settings-outline', 'settings') }} />
+      <Tabs.Screen name="products" options={{ title: tabs.products, tabBarIcon: icon('cube-outline', 'cube') }} />
+      <Tabs.Screen name="sales" options={{ title: tabs.sales, tabBarIcon: icon('cash-outline', 'cash') }} />
+      <Tabs.Screen name="settings" options={{ title: tabs.settings, tabBarIcon: icon('settings-outline', 'settings') }} />
     </Tabs>
   );
 }

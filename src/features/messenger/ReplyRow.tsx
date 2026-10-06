@@ -1,7 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
-import { CUSTOMER_REPLY_LABELS, CUSTOMER_REPLY_RESULT_LABELS, CustomerReply } from '@/models';
+import { CustomerReply } from '@/models';
 import { formatDisplayDateTime } from '@/utils/date.utils';
+import { messengerMessages } from './messenger.messages';
 
 interface ReplyRowProps {
   readonly reply: CustomerReply;
@@ -11,23 +14,25 @@ interface ReplyRowProps {
 
 /** Une réponse Facebook : type, origine (auto / vendeur), texte envoyé, résultat. */
 export function ReplyRow({ reply, heading }: ReplyRowProps) {
+  const t = useMessages(messengerMessages);
+  const { customerReply, customerReplyResult } = useMessages(commonMessages);
   const pending = reply.result === null;
   const delivered = reply.result === 'DELIVERED';
   return (
     <View style={styles.row}>
       {heading !== undefined ? <Text style={styles.heading}>{heading}</Text> : null}
       <View style={styles.top}>
-        <Text style={styles.kind}>{CUSTOMER_REPLY_LABELS[reply.kind]}</Text>
+        <Text style={styles.kind}>{customerReply[reply.kind]}</Text>
         <View style={[styles.origin, reply.automatic ? styles.auto : styles.manual]}>
           <Text style={[styles.originText, reply.automatic ? styles.autoText : styles.manualText]}>
-            {reply.automatic ? 'Auto' : 'Vendeur'}
+            {reply.automatic ? t.originAuto : t.originSeller}
           </Text>
         </View>
         <Text style={styles.date}>{formatDisplayDateTime(reply.createdAt)}</Text>
       </View>
       {reply.messageText !== null ? <Text style={styles.message}>{reply.messageText}</Text> : null}
       <Text style={[styles.result, delivered && styles.ok, !pending && !delivered && styles.ko]}>
-        {pending ? 'En attente d’envoi (réseau)' : CUSTOMER_REPLY_RESULT_LABELS[reply.result ?? 'SEND_FAILED']}
+        {pending ? t.waitingNetwork : customerReplyResult[reply.result ?? 'SEND_FAILED']}
       </Text>
     </View>
   );

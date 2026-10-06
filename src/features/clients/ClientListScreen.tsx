@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, spacing } from '@/core/theme/theme';
 import { ClientSummary } from '@/models';
 import { customerService } from '@/services/customer.service';
@@ -9,20 +10,22 @@ import { Thumbnail } from '@/shared/components/Thumbnail';
 import { SearchField } from '@/shared/components/SearchField';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { formatMoney } from '@/utils/money.utils';
+import { clientsMessages } from './clients.messages';
 import { useClients } from './useClients';
 
 function ClientRow({ summary }: { readonly summary: ClientSummary }) {
+  const t = useMessages(clientsMessages);
   const { client, orderCount, totalSpent } = summary;
   return (
     <ListRow
       title={client.name}
-      subtitle={[client.phone, client.address].filter(Boolean).join(' · ') || 'Aucune coordonnée'}
+      subtitle={[client.phone, client.address].filter(Boolean).join(' · ') || t.noContact}
       leading={<Thumbnail name={client.name} imageUri={null} size={44} />}
       onPress={() => router.push({ pathname: '/clients/[id]', params: { id: client.id } })}
       trailing={
         <View style={styles.trailing}>
           <Text style={styles.spent}>{formatMoney(totalSpent)}</Text>
-          <Text style={styles.orders}>{orderCount} commande(s)</Text>
+          <Text style={styles.orders}>{t.orderCount(orderCount)}</Text>
         </View>
       }
     />
@@ -30,6 +33,7 @@ function ClientRow({ summary }: { readonly summary: ClientSummary }) {
 }
 
 export function ClientListScreen() {
+  const t = useMessages(clientsMessages);
   const [search, setSearch] = useState('');
   const { summaries, totalCount, loading, error, reload } = useClients(search);
   const isFiltered = search.trim().length > 0;
@@ -43,11 +47,11 @@ export function ClientListScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Clients' }} />
+      <Stack.Screen options={{ title: t.title }} />
       <View style={styles.toolbar}>
-        <SearchField accessibilityLabel="Rechercher un client" value={search} onChangeText={setSearch} placeholder="Rechercher (nom, téléphone, adresse)" />
+        <SearchField accessibilityLabel={t.searchLabel} value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder} />
         <Text style={styles.count}>
-          {isFiltered ? `${summaries.length} sur ${totalCount} client(s)` : `${totalCount} client(s)`}
+          {isFiltered ? t.countFiltered(summaries.length, totalCount) : t.countAll(totalCount)}
         </Text>
         <ErrorBanner message={error} />
       </View>
@@ -65,8 +69,9 @@ export function ClientListScreen() {
           contentContainerStyle={summaries.length === 0 ? styles.emptyList : undefined}
           ListEmptyComponent={
             <EmptyState
-              title={isFiltered ? 'Aucun client trouvé' : 'Aucun client'}
-              message={isFiltered ? 'Essayez un autre nom ou numéro.' : 'Ajoutez vos clients pour suivre leurs achats.'}
+              icon={isFiltered ? 'search-outline' : 'people-outline'}
+              title={isFiltered ? t.emptyFilteredTitle : t.emptyTitle}
+              message={isFiltered ? t.emptyFilteredMessage : t.emptyMessage}
             />
           }
         />

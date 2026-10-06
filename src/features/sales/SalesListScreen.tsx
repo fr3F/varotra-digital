@@ -1,9 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, Stack } from 'expo-router';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
-import { PAYMENT_METHOD_LABELS, Period, PERIOD_LABELS, PERIODS, saleProfit, SaleSummary } from '@/models';
+import { Period, PERIODS, saleProfit, SaleSummary } from '@/models';
 import { saleService, salesVersion } from '@/services/sale.service';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
 import { StatCard } from '@/shared/components/StatCard';
@@ -11,11 +13,12 @@ import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/Status
 import { useQuery } from '@/shared/hooks/useQuery';
 import { formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
-
-const PERIOD_OPTIONS: readonly ChipOption<Period>[] = PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }));
+import { salesMessages } from './sales.messages';
 
 function SaleRow({ summary }: { readonly summary: SaleSummary }) {
   const { sale, clientName, orderReference, itemCount } = summary;
+  const t = useMessages(salesMessages);
+  const common = useMessages(commonMessages);
   const profit = saleProfit(sale);
   return (
     <Pressable
@@ -26,11 +29,11 @@ function SaleRow({ summary }: { readonly summary: SaleSummary }) {
       <View style={styles.rowMain}>
         <Text style={styles.reference}>{sale.reference}</Text>
         <Text style={styles.client} numberOfLines={1}>
-          {clientName ?? 'Client de passage'}
+          {clientName ?? t.walkInClient}
           {orderReference !== null ? ` · ${orderReference}` : ''}
         </Text>
         <Text style={styles.meta}>
-          {formatDisplayDateTime(sale.soldAt)} · {itemCount} produit(s) · {PAYMENT_METHOD_LABELS[sale.paymentMethod]}
+          {formatDisplayDateTime(sale.soldAt)} · {t.productCount(itemCount)} · {common.paymentMethod[sale.paymentMethod]}
         </Text>
       </View>
       <View style={styles.amounts}>
@@ -45,6 +48,12 @@ function SaleRow({ summary }: { readonly summary: SaleSummary }) {
 }
 
 export function SalesListScreen() {
+  const t = useMessages(salesMessages);
+  const common = useMessages(commonMessages);
+  const periodOptions = useMemo<readonly ChipOption<Period>[]>(
+    () => PERIODS.map((value) => ({ value, label: common.period[value] })),
+    [common],
+  );
   const [period, setPeriod] = useState<Period>('TODAY');
   const version = useStore(salesVersion);
   const fetchSales = useCallback(
@@ -55,7 +64,7 @@ export function SalesListScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Ventes' }} />
+      <Stack.Screen options={{ title: t.title }} />
       <FlatList
         data={data?.sales ?? []}
         keyExtractor={(summary) => summary.sale.id}
@@ -64,17 +73,17 @@ export function SalesListScreen() {
         onRefresh={reload}
         ListHeaderComponent={
           <View style={styles.header}>
-            <ChipGroup accessibilityLabel="Période" options={PERIOD_OPTIONS} selected={period} onSelect={setPeriod} />
+            <ChipGroup accessibilityLabel={t.periodLabel} options={periodOptions} selected={period} onSelect={setPeriod} />
             <View style={styles.grid}>
               <StatCard
-                label="Chiffre d’affaires"
+                label={t.revenue}
                 value={formatMoney(data?.totals.revenue ?? 0)}
-                caption={`${data?.totals.count ?? 0} vente(s)`}
+                caption={t.salesCount(data?.totals.count ?? 0)}
               />
               <StatCard
-                label="Bénéfice"
+                label={t.profit}
                 value={formatMoney(data?.totals.profit ?? 0)}
-                caption={`achat : ${formatMoney(data?.totals.cost ?? 0)}`}
+                caption={t.costCaption(formatMoney(data?.totals.cost ?? 0))}
                 tone={(data?.totals.profit ?? 0) < 0 ? 'negative' : 'positive'}
               />
             </View>
@@ -87,8 +96,8 @@ export function SalesListScreen() {
           ) : (
             <EmptyState
               icon="cash-outline"
-              title="Aucune vente"
-              message={`Aucune vente sur la période « ${PERIOD_LABELS[period]} ». Une commande livrée devient une vente.`}
+              title={t.emptyTitle}
+              message={t.emptyMessage(common.period[period])}
             />
           )
         }
