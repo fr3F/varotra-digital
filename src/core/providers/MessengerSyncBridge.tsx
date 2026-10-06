@@ -3,8 +3,12 @@ import { AppState } from 'react-native';
 import { messengerOutboxVersion, messengerStore } from '@/services/messenger/messenger-state';
 import { messengerSyncService } from '@/services/messenger/messenger-sync.service';
 
-/** Intervalle de synchronisation tant que l'application est ouverte. */
-const SYNC_INTERVAL_MS = 60_000;
+/**
+ * Intervalle de synchronisation tant que l'application est ouverte : une nouvelle commande
+ * Messenger apparaît en 15 s au plus. Coût : ~4 requêtes/min par téléphone actif, largement
+ * sous le quota gratuit Cloudflare (100 000 requêtes/jour). Les appels ne se chevauchent pas.
+ */
+const SYNC_INTERVAL_MS = 15_000;
 
 function syncIfConnected(): void {
   if (messengerStore.get().connected) {
