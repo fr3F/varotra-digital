@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { Client, EntityId } from '@/models';
 import { AppButton } from './AppButton';
@@ -63,16 +62,6 @@ export function ClientPicker({
                 onPress={() => {
                   onChange(null);
                   setVisible(false);
-                }}
-              />
-            </View>
-            <View style={styles.action}>
-              <AppButton
-                label="+ Nouveau client"
-                variant="secondary"
-                onPress={() => {
-                  setVisible(false);
-                  router.push('/clients/new');
                 }}
               />
             </View>

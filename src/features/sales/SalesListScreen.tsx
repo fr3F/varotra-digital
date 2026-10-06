@@ -5,7 +5,6 @@ import { colors, fontSize, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
 import { PAYMENT_METHOD_LABELS, Period, PERIOD_LABELS, PERIODS, saleProfit, SaleSummary } from '@/models';
 import { saleService, salesVersion } from '@/services/sale.service';
-import { AppButton } from '@/shared/components/AppButton';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
 import { StatCard } from '@/shared/components/StatCard';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
@@ -86,13 +85,14 @@ export function SalesListScreen() {
           data === null ? (
             <LoadingView />
           ) : (
-            <EmptyState title="Aucune vente" message={`Aucune vente sur la période « ${PERIOD_LABELS[period]} ».`} />
+            <EmptyState
+              icon="cash-outline"
+              title="Aucune vente"
+              message={`Aucune vente sur la période « ${PERIOD_LABELS[period]} ». Une commande livrée devient une vente.`}
+            />
           )
         }
       />
-      <View style={styles.footer}>
-        <AppButton label="+ Nouvelle vente" onPress={() => router.push('/sales/new')} />
-      </View>
     </View>
   );
 }
@@ -120,10 +120,4 @@ const styles = StyleSheet.create({
   total: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   profit: { fontSize: fontSize.sm, fontWeight: '600', color: colors.success, fontVariant: ['tabular-nums'] },
   loss: { color: colors.danger },
-  footer: {
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
 });
