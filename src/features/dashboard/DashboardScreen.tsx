@@ -107,7 +107,7 @@ export function DashboardScreen() {
                 <AppButton label="+ Vente" variant="secondary" onPress={() => router.push('/sales/new')} />
               </View>
               <View style={styles.heroAction}>
-                <AppButton label="+ Commande" variant="secondary" onPress={() => router.push('/orders/new')} />
+                <AppButton label="Commandes" variant="secondary" onPress={() => router.push('/orders')} />
               </View>
             </View>
           </View>

@@ -4,7 +4,6 @@ import { router, Stack, useFocusEffect } from 'expo-router';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { ORDER_STATUS_LABELS, ORDER_STATUSES, OrderStatus, OrderSummary } from '@/models';
 import { orderService } from '@/services/order.service';
-import { AppButton } from '@/shared/components/AppButton';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { formatDisplayDateTime } from '@/utils/date.utils';
@@ -93,15 +92,12 @@ export function OrderListScreen() {
           ListEmptyComponent={
             <EmptyState
               title={isFiltered ? 'Aucune commande trouvée' : 'Aucune commande'}
-              message={isFiltered ? undefined : 'Enregistrez votre première commande client.'}
+              message={isFiltered ? undefined : 'Les commandes reçues sur Messenger apparaissent ici automatiquement.'}
             />
           }
         />
       )}
 
-      <View style={styles.footer}>
-        <AppButton label="+ Nouvelle commande" onPress={() => router.push('/orders/new')} />
-      </View>
     </View>
   );
 }
@@ -137,10 +133,4 @@ const styles = StyleSheet.create({
   client: { fontSize: fontSize.md, color: colors.text },
   meta: { fontSize: fontSize.sm, color: colors.textMuted },
   total: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  footer: {
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
 });
