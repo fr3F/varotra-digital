@@ -1,4 +1,6 @@
 import { formatMoney, normalizeText, truncate } from '../shared/format.ts';
+import { detectLanguage, type Lang, MESSAGES, type Messages } from './i18n.ts';
+import { quantityOnly } from './numbers.ts';
 import { parseOrderMessage } from './order-parser.ts';
 import {
   type CartItem,
@@ -58,20 +60,41 @@ export const PAYLOADS = {
 const PAGE_SIZE = 10;
 const MAX_QUANTITY_CHOICES = 5;
 
-/** Mots qui déclenchent l'affichage du menu (français et malgache). */
+/** Mots qui déclenchent l'affichage du menu (français, malgache, anglais). */
 const MENU_WORDS = new Set([
   'menu', 'catalogue', 'produit', 'produits', 'prix', 'commander', 'commande', 'bonjour', 'salut', 'hello', 'bonsoir',
-  'salama', 'manao', 'akory', 'vidiny', 'lisitra', 'entana',
+  'salama', 'manao', 'akory', 'vidiny', 'lisitra', 'entana', 'inona', 'varotra',
+  'hi', 'products', 'product', 'catalog', 'price', 'prices', 'shop', 'order',
 ]);
 
-const ACTIONS: Readonly<Record<'checkout' | 'adjust' | 'more' | 'cancel' | 'menu' | 'sendRaw', QuickReply>> = {
-  checkout: { title: '✅ Valider', payload: PAYLOADS.checkout },
-  adjust: { title: '✔️ Ajuster au stock', payload: PAYLOADS.adjust },
-  more: { title: '➕ Autre produit', payload: PAYLOADS.menu },
-  cancel: { title: '🗑️ Annuler', payload: PAYLOADS.cancel },
-  menu: { title: '🛒 Voir les produits', payload: PAYLOADS.menu },
-  sendRaw: { title: '📝 Envoyer au vendeur', payload: PAYLOADS.sendRaw },
+/** Réponses écrites qui valent « Valider » / « Annuler » quand le panier est affiché. */
+const CONFIRM_WORDS = new Set(['valider', 'valide', 'oui', 'ok', 'okay', 'confirmer', 'eny', 'ekena', 'hamafisina', 'yes', 'confirm']);
+const CANCEL_WORDS = new Set(['annuler', 'annule', 'foanana', 'ajanony', 'cancel']);
+
+type ActionKey = 'checkout' | 'adjust' | 'more' | 'cancel' | 'menu' | 'sendRaw';
+
+const ACTION_PAYLOADS: Readonly<Record<ActionKey, string>> = {
+  checkout: PAYLOADS.checkout,
+  adjust: PAYLOADS.adjust,
+  more: PAYLOADS.menu,
+  cancel: PAYLOADS.cancel,
+  menu: PAYLOADS.menu,
+  sendRaw: PAYLOADS.sendRaw,
 };
+
+/** Bouton de réponse rapide dans la langue du client. */
+function action(lang: Lang, key: ActionKey): QuickReply {
+  return { title: MESSAGES[lang].buttons[key], payload: ACTION_PAYLOADS[key] };
+}
+
+function t(state: ConversationState): Messages {
+  return MESSAGES[state.lang];
+}
+
+/** Nouvelle conversation, en gardant la langue du client. */
+function resetState(state: ConversationState): ConversationState {
+  return { ...INITIAL_CONVERSATION, lang: state.lang };
+}
 
 function availableProducts(catalog: readonly CatalogProduct[]): CatalogProduct[] {
   return catalog.filter((product) => product.available > 0);
@@ -106,11 +129,6 @@ function exceedsStock(items: readonly DraftItem[], catalog: readonly CatalogProd
   return items.some((item) => item.quantity > availableOf(catalog, item.productId));
 }
 
-function welcomeText(customerName: string | null): string {
-  const greeting = customerName === null ? 'Bonjour 👋' : `Bonjour ${customerName} 👋`;
-  return `${greeting}\nChoisissez un produit ci-dessous, ou écrivez directement votre commande, par exemple : « 2 huile tiko et 1 savon ».`;
-}
-
 function productMenu(state: ConversationState, ctx: EngineContext, page: number, intro?: string): EngineResult {
   const products = availableProducts(ctx.catalog);
   if (products.length === 0) {
@@ -118,8 +136,8 @@ function productMenu(state: ConversationState, ctx: EngineContext, page: number,
       state: { ...state, step: { kind: 'IDLE' } },
       replies: [
         {
-          text: `${intro === undefined ? '' : `${intro}\n\n`}Aucun produit n’est disponible pour le moment. Écrivez votre demande : le vendeur vous répondra.`,
-          ...(state.unparsedText === null ? {} : { quickReplies: [ACTIONS.sendRaw] }),
+          text: `${intro === undefined ? '' : `${intro}\n\n`}${t(state).noProducts}`,
+          ...(state.unparsedText === null ? {} : { quickReplies: [action(state.lang, 'sendRaw')] }),
         },
       ],
     };
@@ -133,16 +151,16 @@ function productMenu(state: ConversationState, ctx: EngineContext, page: number,
     payload: PAYLOADS.product(product.id),
   }));
   if (current + 1 < pageCount) {
-    quickReplies.push({ title: 'Suite ▶', payload: PAYLOADS.page(current + 1) });
+    quickReplies.push({ title: t(state).buttons.next, payload: PAYLOADS.page(current + 1) });
   }
   if (state.cart.length > 0) {
-    quickReplies.push({ title: `🛒 Panier (${state.cart.length})`, payload: PAYLOADS.cart });
+    quickReplies.push({ title: t(state).buttons.cart(state.cart.length), payload: PAYLOADS.cart });
   }
   // Premier message non compris : il peut être transmis tel quel au vendeur.
   if (state.unparsedText !== null) {
-    quickReplies.push(ACTIONS.sendRaw);
+    quickReplies.push(action(state.lang, 'sendRaw'));
   }
-  const header = pageCount > 1 ? `Nos produits (${current + 1}/${pageCount}) :` : 'Nos produits :';
+  const header = t(state).productsHeader(current + 1, pageCount);
   return {
     state: { ...state, step: { kind: 'CHOOSING_PRODUCT', page: current } },
     replies: [{ text: `${intro === undefined ? '' : `${intro}\n\n`}${header}\n${list}`, quickReplies }],
@@ -152,24 +170,24 @@ function productMenu(state: ConversationState, ctx: EngineContext, page: number,
 function cartSummary(state: ConversationState, ctx: EngineContext, intro?: string): EngineResult {
   const items = cartItems(state.cart, ctx.catalog);
   if (items.length === 0) {
-    return productMenu({ ...state, cart: [] }, ctx, 0, intro ?? 'Votre panier est vide.');
+    return productMenu({ ...state, cart: [] }, ctx, 0, intro ?? t(state).emptyCart);
   }
   const lines = items.map((item) => {
     const available = availableOf(ctx.catalog, item.productId);
     const warning =
-      item.quantity <= available ? '' : available === 0 ? ' ⚠️ épuisé' : ` ⚠️ seulement ${available} en stock`;
+      item.quantity <= available ? '' : available === 0 ? ` ${t(state).soldOut}` : ` ${t(state).onlyInStock(available)}`;
     return `• ${item.quantity} × ${item.productName} — ${formatMoney(item.quantity * item.unitPrice)}${warning}`;
   });
   const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   // Stock vérifié avant validation : un panier qui dépasse le stock ne peut pas être validé.
   const shortage = exceedsStock(items, ctx.catalog);
-  const stockNote = shortage ? '\n\n⚠️ Stock insuffisant : ajustez votre panier pour pouvoir le valider.' : '';
+  const stockNote = shortage ? `\n\n${t(state).stockShortage}` : '';
   return {
     state: { ...state, step: { kind: 'CART' } },
     replies: [
       {
-        text: `${intro === undefined ? '' : `${intro}\n\n`}Votre panier :\n${lines.join('\n')}\nTotal : ${formatMoney(total)}${stockNote}`,
-        quickReplies: shortage ? [ACTIONS.adjust, ACTIONS.more, ACTIONS.cancel] : [ACTIONS.checkout, ACTIONS.more, ACTIONS.cancel],
+        text: `${intro === undefined ? '' : `${intro}\n\n`}${t(state).cartTitle}\n${lines.join('\n')}\n${t(state).total(formatMoney(total))}${stockNote}`,
+        quickReplies: [shortage ? 'adjust' : 'checkout', 'more', 'cancel'].map((key) => action(state.lang, key as ActionKey)),
       },
     ],
   };
@@ -178,14 +196,14 @@ function cartSummary(state: ConversationState, ctx: EngineContext, intro?: strin
 function askQuantity(state: ConversationState, ctx: EngineContext, productId: string): EngineResult {
   const product = findProduct(ctx.catalog, productId);
   if (product === undefined || product.available <= 0) {
-    return productMenu(state, ctx, 0, 'Désolé, ce produit n’est plus disponible.');
+    return productMenu(state, ctx, 0, t(state).productUnavailable);
   }
   const choices = Array.from({ length: Math.min(product.available, MAX_QUANTITY_CHOICES) }, (_, index) => index + 1);
   return {
     state: { ...state, step: { kind: 'CHOOSING_QUANTITY', productId } },
     replies: [
       {
-        text: `${product.name} — ${formatMoney(product.unitPrice)}\nCombien en voulez-vous ? (ou écrivez un nombre)`,
+        text: t(state).howMany(product.name, formatMoney(product.unitPrice)),
         quickReplies: choices.map((quantity) => ({ title: String(quantity), payload: PAYLOADS.quantity(quantity) })),
       },
     ],
@@ -195,9 +213,9 @@ function askQuantity(state: ConversationState, ctx: EngineContext, productId: st
 function addQuantity(state: ConversationState, ctx: EngineContext, productId: string, quantity: number): EngineResult {
   const product = findProduct(ctx.catalog, productId);
   if (product === undefined) {
-    return productMenu(state, ctx, 0, 'Désolé, ce produit n’est plus disponible.');
+    return productMenu(state, ctx, 0, t(state).productUnavailable);
   }
-  return cartSummary({ ...state, cart: addToCart(state.cart, productId, quantity) }, ctx, `C’est noté : ${quantity} × ${product.name}.`);
+  return cartSummary({ ...state, cart: addToCart(state.cart, productId, quantity) }, ctx, t(state).noted(quantity, product.name));
 }
 
 /** Chaque ligne ramenée au stock disponible ; les produits épuisés sont retirés du panier. */
@@ -207,22 +225,22 @@ function adjustToStock(state: ConversationState, ctx: EngineContext): EngineResu
     return quantity > 0 ? [{ ...item, quantity }] : [];
   });
   if (cart.length === 0) {
-    return productMenu({ ...state, cart: [] }, ctx, 0, 'Désolé, ces produits sont épuisés pour le moment.');
+    return productMenu({ ...state, cart: [] }, ctx, 0, t(state).allSoldOut);
   }
-  return cartSummary({ ...state, cart }, ctx, 'Panier ajusté au stock disponible 👍');
+  return cartSummary({ ...state, cart }, ctx, t(state).adjusted);
 }
 
 function checkout(state: ConversationState, ctx: EngineContext): EngineResult {
   const items = cartItems(state.cart, ctx.catalog);
   if (items.length === 0) {
-    return productMenu({ ...state, cart: [] }, ctx, 0, 'Votre panier est vide.');
+    return productMenu({ ...state, cart: [] }, ctx, 0, t(state).emptyCart);
   }
   // Ancien bouton « Valider » ou stock modifié entre-temps : rien n'est commandé au-delà du stock.
   if (exceedsStock(items, ctx.catalog)) {
-    return cartSummary(state, ctx, 'Impossible de valider : stock insuffisant.');
+    return cartSummary(state, ctx, t(state).cannotValidate);
   }
   return {
-    state: INITIAL_CONVERSATION,
+    state: resetState(state),
     replies: [],
     order: {
       mode: state.rawTexts.length > 0 ? 'TEXT' : 'GUIDED',
@@ -256,8 +274,8 @@ function handlePayload(payload: string, state: ConversationState, ctx: EngineCon
       return adjustToStock(state, ctx);
     case PAYLOADS.cancel:
       return {
-        state: INITIAL_CONVERSATION,
-        replies: [{ text: 'Votre panier a été vidé. Écrivez « menu » pour recommencer.', quickReplies: [ACTIONS.menu] }],
+        state: resetState(state),
+        replies: [{ text: t(state).cartCleared, quickReplies: [action(state.lang, 'menu')] }],
       };
     case PAYLOADS.sendRaw: {
       if (state.unparsedText === null) {
@@ -265,7 +283,7 @@ function handlePayload(payload: string, state: ConversationState, ctx: EngineCon
       }
       const items = cartItems(state.cart, ctx.catalog);
       return {
-        state: INITIAL_CONVERSATION,
+        state: resetState(state),
         replies: [],
         order: {
           mode: 'RAW',
@@ -277,43 +295,49 @@ function handlePayload(payload: string, state: ConversationState, ctx: EngineCon
     }
     default:
       // GET_STARTED et toute charge inconnue : accueil.
-      return productMenu(state, ctx, 0, welcomeText(ctx.customerName));
+      return productMenu(state, ctx, 0, t(state).welcome(ctx.customerName));
   }
 }
 
-function handleText(text: string, state: ConversationState, ctx: EngineContext): EngineResult {
+function handleText(text: string, current: ConversationState, ctx: EngineContext): EngineResult {
+  // Le bot répond dans la langue du dernier message reconnu (sinon, la langue précédente).
+  const state: ConversationState = { ...current, lang: detectLanguage(text) ?? current.lang };
   const words = normalizeText(text).split(' ');
 
-  // Réponse à « Combien en voulez-vous ? » écrite au clavier.
-  if (state.step.kind === 'CHOOSING_QUANTITY' && words.length === 1 && /^\d{1,3}$/.test(words[0] ?? '')) {
-    const quantity = Number(words[0]);
-    if (quantity > 0) {
+  // Réponse à « Combien en voulez-vous ? » écrite au clavier (« 3 », « roa », « twelve »…).
+  if (state.step.kind === 'CHOOSING_QUANTITY') {
+    const quantity = quantityOnly(words);
+    if (quantity !== null && quantity > 0) {
       return addQuantity(state, ctx, state.step.productId, quantity);
+    }
+  }
+
+  // « oui », « eny », « yes »… ou « annuler », « foanana », « cancel » devant le panier.
+  if (state.step.kind === 'CART' && words.length <= 2) {
+    if (words.some((word) => CONFIRM_WORDS.has(word))) {
+      return checkout(state, ctx);
+    }
+    if (words.some((word) => CANCEL_WORDS.has(word))) {
+      return handlePayload(PAYLOADS.cancel, state, ctx);
     }
   }
 
   const parsed = parseOrderMessage(text, ctx.catalog);
   if (parsed.lines.length > 0) {
     const cart = parsed.lines.reduce((current, line) => addToCart(current, line.productId, line.quantity), [...state.cart]);
-    const note =
-      parsed.unmatched.length > 0 ? `Je n’ai pas reconnu : « ${parsed.unmatched.join(' », « ')} ».` : undefined;
+    const note = parsed.unmatched.length > 0 ? t(state).notRecognized(parsed.unmatched) : undefined;
     return cartSummary({ ...state, cart, rawTexts: [...state.rawTexts, text], unparsedText: null }, ctx, note);
   }
 
   if (words.some((word) => MENU_WORDS.has(word)) || state.step.kind === 'IDLE') {
-    const intro = state.step.kind === 'IDLE' ? welcomeText(ctx.customerName) : undefined;
+    const intro = state.step.kind === 'IDLE' ? t(state).welcome(ctx.customerName) : undefined;
     return productMenu({ ...state, unparsedText: state.step.kind === 'IDLE' ? text : null }, ctx, 0, intro);
   }
 
-  const quickReplies = state.cart.length > 0 ? [ACTIONS.checkout, ACTIONS.menu, ACTIONS.sendRaw] : [ACTIONS.menu, ACTIONS.sendRaw];
+  const keys: ActionKey[] = state.cart.length > 0 ? ['checkout', 'menu', 'sendRaw'] : ['menu', 'sendRaw'];
   return {
     state: { ...state, unparsedText: text },
-    replies: [
-      {
-        text: 'Je n’ai pas bien compris 🙏 Choisissez un produit dans la liste, ou envoyez votre message tel quel au vendeur.',
-        quickReplies,
-      },
-    ],
+    replies: [{ text: t(state).notUnderstood, quickReplies: keys.map((key) => action(state.lang, key)) }],
   };
 }
 
@@ -331,19 +355,18 @@ export function handleMessage(state: ConversationState, message: IncomingMessage
     case 'UNSUPPORTED':
       return {
         state,
-        replies: [{ text: 'Je ne peux lire que les messages écrits pour le moment. Écrivez votre commande 🙂', quickReplies: [ACTIONS.menu] }],
+        replies: [{ text: t(state).textOnly, quickReplies: [action(state.lang, 'menu')] }],
       };
   }
 }
 
-/** Confirmation envoyée au client une fois la commande enregistrée. */
-export function confirmationReply(draft: OrderDraft): OutgoingReply {
+/** Confirmation envoyée au client une fois la commande enregistrée, dans sa langue. */
+export function confirmationReply(draft: OrderDraft, lang: Lang): OutgoingReply {
+  const messages = MESSAGES[lang];
   if (draft.mode === 'RAW') {
-    return { text: `Merci ! Votre message a été transmis au vendeur (réf. ${draft.reference}). Il vous répondra très vite.` };
+    return { text: messages.rawSent(draft.reference) };
   }
   const total = draft.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const lines = draft.items.map((item) => `• ${item.quantity} × ${item.productName}`).join('\n');
-  return {
-    text: `Commande reçue ✅ (réf. ${draft.reference})\n${lines}\nTotal : ${formatMoney(total)}\nLe vendeur vous confirmera la disponibilité et la livraison.`,
-  };
+  return { text: messages.receipt(draft.reference, lines, formatMoney(total)) };
 }

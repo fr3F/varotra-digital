@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { DEFAULT_LANG, isLang } from '../domain/i18n.ts';
 import {
   type CartItem,
   type CatalogProduct,
@@ -66,7 +67,8 @@ function parseState(json: string): ConversationState {
       ? value['rawTexts'].filter((text: unknown): text is string => typeof text === 'string')
       : [];
     const unparsedText = typeof value['unparsedText'] === 'string' ? value['unparsedText'] : null;
-    return { step: parseStep(value['step']), cart: parseCart(value['cart']), rawTexts, unparsedText };
+    const lang = isLang(value['lang']) ? value['lang'] : DEFAULT_LANG;
+    return { step: parseStep(value['step']), cart: parseCart(value['cart']), rawTexts, unparsedText, lang };
   } catch {
     return INITIAL_CONVERSATION;
   }
