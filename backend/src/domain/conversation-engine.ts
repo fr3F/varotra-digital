@@ -1,6 +1,6 @@
 import { formatMoney, normalizeText, truncate } from '../shared/format.ts';
 import { detectLanguage, type Lang, MESSAGES, type Messages } from './i18n.ts';
-import { quantityOnly } from './numbers.ts';
+import { quantityOnly, replaceNumberWords } from './numbers.ts';
 import { parseOrderMessage } from './order-parser.ts';
 import {
   type CartItem,
@@ -27,6 +27,27 @@ export interface EngineContext {
   readonly customerName: string | null;
   /** Produits les plus commandés récemment (réels), du plus au moins demandé. */
   readonly popularIds?: readonly string[];
+  /** Lignes de la dernière commande de ce client (« toy ny teo » / « comme avant »). */
+  readonly lastOrderItems?: readonly DraftItem[];
+  /** Produits déjà commandés par ce client, du plus récent au plus ancien. */
+  readonly customerProductIds?: readonly string[];
+}
+
+/** Mots de question : prix, disponibilité, description (malgache, français, anglais). */
+const QUESTION_WORDS = new Set([
+  'ohatrinona', 'hoatrinona', 'vidiny', 'misy', 'mbola', 'inona', 'habe', 'loko', 've',
+  'combien', 'prix', 'coute', 'cout', 'disponible', 'dispo', 'reste', 'quoi', 'taille', 'couleur', 'details',
+  'how', 'much', 'price', 'cost', 'available', 'what', 'size', 'color', 'colour',
+]);
+/** « toy ny teo », « comme la dernière fois », « same as last time »… */
+const REORDER_PHRASES = [
+  'toy ny teo', 'mitovy amin ny teo', 'ilay teo', 'averina', 'comme la derniere fois', 'comme avant', 'meme commande',
+  'la meme chose', 'same as last time', 'same again', 'reorder', 'same order',
+];
+const THANKS_WORDS = new Set(['misaotra', 'merci', 'thanks', 'thank', 'thx', 'mersi', 'tsara', 'super', 'cool']);
+
+function isReturningCustomer(ctx: EngineContext): boolean {
+  return (ctx.lastOrderItems ?? []).length > 0;
 }
 
 /** En dessous de ce stock, le client est prévenu qu'il en reste peu (vrai chiffre, jamais inventé). */
@@ -45,6 +66,16 @@ function byPopularity(ctx: EngineContext, products: readonly CatalogProduct[]): 
     return index === -1 ? Number.MAX_SAFE_INTEGER : index;
   };
   return [...products].sort((a, b) => rank(a) - rank(b));
+}
+
+/** Pour ce client : ce qu'il a déjà acheté d'abord, puis les plus demandés. */
+function forCustomer(ctx: EngineContext, products: readonly CatalogProduct[]): CatalogProduct[] {
+  const bought = ctx.customerProductIds ?? [];
+  const rank = (product: CatalogProduct) => {
+    const index = bought.indexOf(product.id);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  return byPopularity(ctx, products).sort((a, b) => rank(a) - rank(b));
 }
 
 export interface OrderRequest {
@@ -71,6 +102,8 @@ export const PAYLOADS = {
   adjust: 'ADJUST',
   cancel: 'CANCEL',
   sendRaw: 'SEND_RAW',
+  /** Remet la dernière commande du client dans le panier. */
+  reorder: 'REORDER',
   page: (page: number) => `PAGE:${page}`,
   product: (id: string) => `PRODUCT:${id}`,
   quantity: (quantity: number) => `QTY:${quantity}`,
@@ -114,6 +147,77 @@ function t(state: ConversationState): Messages {
 /** Nouvelle conversation, en gardant la langue du client. */
 function resetState(state: ConversationState): ConversationState {
   return { ...INITIAL_CONVERSATION, lang: state.lang };
+}
+
+function welcome(state: ConversationState, ctx: EngineContext): string {
+  return isReturningCustomer(ctx) ? t(state).smart.welcomeBack(ctx.customerName) : t(state).welcome(ctx.customerName);
+}
+
+/** Remet la dernière commande dans le panier (produits encore au catalogue) ; le stock est vérifié au panier. */
+function reorder(state: ConversationState, ctx: EngineContext): EngineResult {
+  const cart = (ctx.lastOrderItems ?? [])
+    .filter((item) => findProduct(ctx.catalog, item.productId) !== undefined)
+    .reduce<CartItem[]>((current, item) => addToCart(current, item.productId, item.quantity), []);
+  if (cart.length === 0) {
+    return productMenu(state, ctx, 0, t(state).smart.noPreviousOrder);
+  }
+  return cartSummary({ ...state, cart }, ctx, t(state).smart.reorderIntro);
+}
+
+/**
+ * Question sur un ou plusieurs produits (« ohatrinona ny kiraro ? », « vous avez des casquettes ? ») :
+ * prix, disponibilité réelle et description. Un seul produit disponible : on demande la quantité.
+ */
+function answerQuestion(state: ConversationState, ctx: EngineContext, productIds: readonly string[]): EngineResult {
+  const products = productIds
+    .map((id) => findProduct(ctx.catalog, id))
+    .filter((product): product is CatalogProduct => product !== undefined)
+    .slice(0, 3);
+  const blocks = products.map((product) =>
+    [
+      `${product.name} — ${formatMoney(product.unitPrice)}`,
+      product.description,
+      product.available <= 0
+        ? t(state).smart.soldOutNow
+        : product.available <= LOW_STOCK
+          ? t(state).sales.lowStockLine(product.available)
+          : t(state).smart.inStock,
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n'),
+  );
+  const available = products.filter((product) => product.available > 0);
+  if (available.length === 0) {
+    return productMenu(state, ctx, 0, `${blocks.join('\n\n')}\n\n${t(state).smart.soldOutAlternatives}`);
+  }
+  const single = available.length === 1 ? available[0] : undefined;
+  if (single !== undefined) {
+    const choices = Array.from({ length: Math.min(single.available, MAX_QUANTITY_CHOICES) }, (_, index) => index + 1);
+    return {
+      state: { ...state, step: { kind: 'CHOOSING_QUANTITY', productId: single.id } },
+      replies: [
+        {
+          text: `${blocks.join('\n\n')}\n\n${t(state).smart.askQuantity}`,
+          quickReplies: [
+            ...choices.map((quantity) => ({ title: String(quantity), payload: PAYLOADS.quantity(quantity) })),
+            action(state.lang, 'menu'),
+          ],
+        },
+      ],
+    };
+  }
+  return {
+    state: { ...state, step: { kind: 'IDLE' } },
+    replies: [
+      {
+        text: blocks.join('\n\n'),
+        quickReplies: [
+          ...available.map((product) => ({ title: truncate(t(state).smart.buy(product.name), 20), payload: PAYLOADS.product(product.id) })),
+          action(state.lang, 'menu'),
+        ],
+      },
+    ],
+  };
 }
 
 function availableProducts(catalog: readonly CatalogProduct[]): CatalogProduct[] {
@@ -185,6 +289,10 @@ function productMenu(state: ConversationState, ctx: EngineContext, page: number,
   if (state.cart.length > 0) {
     quickReplies.push({ title: t(state).buttons.cart(state.cart.length), payload: PAYLOADS.cart });
   }
+  // Client fidèle : sa dernière commande en un bouton.
+  if (isReturningCustomer(ctx) && state.cart.length === 0) {
+    quickReplies.unshift({ title: t(state).smart.reorder, payload: PAYLOADS.reorder });
+  }
   // Premier message non compris : il peut être transmis tel quel au vendeur.
   if (state.unparsedText !== null) {
     quickReplies.push(action(state.lang, 'sendRaw'));
@@ -213,7 +321,7 @@ function cartSummary(state: ConversationState, ctx: EngineContext, intro?: strin
   // Panier valide : produits complémentaires (les plus demandés d'abord) et invitation à valider.
   const suggestions = shortage
     ? []
-    : byPopularity(ctx, availableProducts(ctx.catalog))
+    : forCustomer(ctx, availableProducts(ctx.catalog))
         .filter((product) => !state.cart.some((item) => item.productId === product.id))
         .slice(0, MAX_SUGGESTIONS);
   const notes = shortage
@@ -328,6 +436,8 @@ function handlePayload(payload: string, state: ConversationState, ctx: EngineCon
       return checkout(state, ctx);
     case PAYLOADS.adjust:
       return adjustToStock(state, ctx);
+    case PAYLOADS.reorder:
+      return reorder(state, ctx);
     case PAYLOADS.cancel:
       return {
         state: resetState(state),
@@ -351,7 +461,7 @@ function handlePayload(payload: string, state: ConversationState, ctx: EngineCon
     }
     default:
       // GET_STARTED et toute charge inconnue : accueil.
-      return productMenu(state, ctx, 0, t(state).welcome(ctx.customerName));
+      return productMenu(state, ctx, 0, welcome(state, ctx));
   }
 }
 
@@ -378,7 +488,22 @@ function handleText(text: string, current: ConversationState, ctx: EngineContext
     }
   }
 
+  const normalized = normalizeText(text);
+  // « Misaotra », « merci », « thanks » seuls : réponse polie plutôt que « je n'ai pas compris ».
+  if (words.length <= 4 && words.some((word) => THANKS_WORDS.has(word)) && parseOrderMessage(text, ctx.catalog).lines.length === 0) {
+    return { state, replies: [{ text: t(state).smart.thanks, quickReplies: [action(state.lang, 'menu')] }] };
+  }
+  if (REORDER_PHRASES.some((phrase) => normalized.includes(phrase))) {
+    return reorder(state, ctx);
+  }
+
   const parsed = parseOrderMessage(text, ctx.catalog);
+  // Question sur un produit, sans quantité demandée : on répond (prix, stock, description) au lieu de remplir le panier.
+  const asksQuestion = text.includes('?') || words.some((word) => QUESTION_WORDS.has(word));
+  const hasQuantity = replaceNumberWords(words).some((word) => /^x?\d{1,3}x?$/.test(word));
+  if (parsed.lines.length > 0 && asksQuestion && !hasQuantity) {
+    return answerQuestion({ ...state, unparsedText: null }, ctx, parsed.lines.map((line) => line.productId));
+  }
   if (parsed.lines.length > 0) {
     const cart = parsed.lines.reduce((current, line) => addToCart(current, line.productId, line.quantity), [...state.cart]);
     const note = parsed.unmatched.length > 0 ? t(state).notRecognized(parsed.unmatched) : undefined;
@@ -386,7 +511,7 @@ function handleText(text: string, current: ConversationState, ctx: EngineContext
   }
 
   if (words.some((word) => MENU_WORDS.has(word)) || state.step.kind === 'IDLE') {
-    const intro = state.step.kind === 'IDLE' ? t(state).welcome(ctx.customerName) : undefined;
+    const intro = state.step.kind === 'IDLE' ? welcome(state, ctx) : undefined;
     return productMenu({ ...state, unparsedText: state.step.kind === 'IDLE' ? text : null }, ctx, 0, intro);
   }
 

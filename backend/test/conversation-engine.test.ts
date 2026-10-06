@@ -143,6 +143,76 @@ describe('bot vendeur (arguments réels)', () => {
   });
 });
 
+describe('bot intelligent', () => {
+  const smartCatalog: CatalogProduct[] = [
+    { id: 'kiraro', name: 'Kiraro', sku: null, unitPrice: 12000, available: 10, description: 'Hoditra tena izy, habe 38 ka hatramin’ny 44.' },
+    { id: 'casquette', name: 'Casquette', sku: null, unitPrice: 2000, available: 0, description: null },
+    { id: 'tshirt', name: 'T-shirt', sku: null, unitPrice: 8000, available: 2, description: null },
+  ];
+  const fidele = {
+    catalog: smartCatalog,
+    customerName: 'Rasoa',
+    lastOrderItems: [{ productId: 'kiraro', productName: 'Kiraro', quantity: 2, unitPrice: 12000 }],
+    customerProductIds: ['tshirt', 'kiraro'],
+  };
+  const nouveau = { catalog: smartCatalog, customerName: 'Rasoa' };
+  const say = (text: string, context: Parameters<typeof handleMessage>[2] = nouveau) =>
+    handleMessage(INITIAL_CONVERSATION, { kind: 'TEXT', text }, context);
+
+  it('comprend une faute de frappe', () => {
+    assert.match(say('mila kirarro 2').replies[0]?.text ?? '', /2 × Kiraro/);
+    assert.match(say('je voudrais 1 tshirtt').replies[0]?.text ?? '', /1 × T-shirt/);
+  });
+
+  it('répond à une question de prix : prix, description, stock, puis demande la quantité', () => {
+    const result = say('Ohatrinona ny kiraro ?');
+    const text = result.replies[0]?.text ?? '';
+    assert.match(text, /^Kiraro — 12\D000\sAr\nHoditra tena izy/);
+    assert.match(text, /✅ Misy\n\nFiry no ilainao \?/);
+    assert.equal(result.state.step.kind, 'CHOOSING_QUANTITY');
+    assert.equal(result.order, undefined);
+    // Le client répond simplement « roa » : 2 kiraro dans le panier.
+    const next = handleMessage(result.state, { kind: 'TEXT', text: 'roa' }, nouveau);
+    assert.match(next.replies[0]?.text ?? '', /2 × Kiraro/);
+  });
+
+  it('disponibilité : stock faible, épuisé avec alternatives', () => {
+    assert.match(say('Is the t-shirt available?').replies[0]?.text ?? '', /🔥 Only 2 left in stock/);
+    const soldOut = say('Vous avez des casquettes ?').replies[0]?.text ?? '';
+    assert.match(soldOut, /Casquette — 2\D000\sAr\n😔 Épuisé pour le moment/);
+    assert.match(soldOut, /Voici ce qui est disponible :[\s\S]*Kiraro/);
+  });
+
+  it('plusieurs produits demandés : un bouton par produit disponible', () => {
+    const reply = say('Combien coûtent le kiraro et le t-shirt ?').replies[0];
+    assert.match(reply?.text ?? '', /Kiraro — [\s\S]*T-shirt —/);
+    assert.deepEqual(reply?.quickReplies?.map((q) => q.payload), [PAYLOADS.product('kiraro'), PAYLOADS.product('tshirt'), PAYLOADS.menu]);
+  });
+
+  it('une quantité dans le message reste une commande, même avec « ve »', () => {
+    assert.match(say('mila kiraro 2 ve').replies[0]?.text ?? '', /^Ny haronao :\n• 2 × Kiraro/);
+  });
+
+  it('client fidèle : accueil personnalisé, « toy ny teo » et suggestions selon ses achats', () => {
+    const hello = say('Salama', fidele).replies[0];
+    assert.match(hello?.text ?? '', /^Faly mahita anao indray Rasoa 👋/);
+    assert.equal(hello?.quickReplies?.[0]?.payload, PAYLOADS.reorder);
+
+    const again = say('toy ny teo azafady', fidele).replies[0]?.text ?? '';
+    assert.match(again, /^Ity ny kaomandinao farany[\s\S]*2 × Kiraro — 24\D000\sAr/);
+    // Déjà acheté par ce client : proposé en premier.
+    assert.match(again, /Matetika miaraka amin’ny : T-shirt/);
+
+    // Bouton sans texte : langue par défaut (français).
+    assert.match(handleMessage(INITIAL_CONVERSATION, quick(PAYLOADS.reorder), nouveau).replies[0]?.text ?? '', /Vous n’avez pas encore commandé ici/);
+  });
+
+  it('remerciements : réponse polie', () => {
+    assert.match(say('Misaotra betsaka').replies[0]?.text ?? '', /^Misaotra anao koa 🙏/);
+    assert.match(say('Merci !').replies[0]?.text ?? '', /^Merci à vous 🙏/);
+  });
+});
+
 describe('langues : malgache, français, anglais', () => {
   it('répond dans la langue du client et garde cette langue pour les boutons', () => {
     const mg = converse([{ kind: 'TEXT', text: 'Salama, mila savon roa azafady' }]).replies[0];

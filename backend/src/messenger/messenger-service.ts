@@ -68,6 +68,8 @@ export function createMessengerService(deps: {
           catalog: await repos.catalog.findAll(),
           customerName,
           popularIds: await repos.drafts.popularProductIds(popularitySince(), POPULAR_COUNT),
+          lastOrderItems: latest?.items ?? [],
+          customerProductIds: await repos.drafts.productIdsOrderedBy(event.psid),
         });
         await repos.conversations.save({ psid: event.psid, customerName, state: result.state, lastCustomerMessageAt });
 
