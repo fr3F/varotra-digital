@@ -45,7 +45,17 @@
       [
         "expo-notifications",
         {
-          "color": "#0F766E"
+          "color": "#A3161D"
+        }
+      ],
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#A3161D",
+          "image": "./assets/splash-logo.png",
+          "imageWidth": 220,
+          "resizeMode": "contain"
         }
       ]
     ],

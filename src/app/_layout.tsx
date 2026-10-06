@@ -13,15 +13,19 @@ export default function RootLayout() {
     <DatabaseProvider>
       <NotificationBridge>
         <MessengerSyncBridge>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <Stack
             screenOptions={{
-              headerStyle: { backgroundColor: colors.primary },
-              headerTintColor: colors.onPrimary,
-              headerTitleStyle: { fontWeight: '600' },
+              headerStyle: { backgroundColor: colors.surface },
+              headerTintColor: colors.primary,
+              headerTitleStyle: { fontWeight: '700', color: colors.text },
+              headerShadowVisible: false,
               contentStyle: { backgroundColor: colors.background },
             }}
-          />
+          >
+            {/* Onglets (accueil, commandes, produits, ventes, réglages) : en-têtes gérés par les onglets. */}
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          </Stack>
         </MessengerSyncBridge>
       </NotificationBridge>
     </DatabaseProvider>

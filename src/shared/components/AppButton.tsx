@@ -40,15 +40,15 @@ export function AppButton({ label, onPress, variant = 'primary', disabled = fals
 const styles = StyleSheet.create({
   base: {
     minHeight: 48,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primary: { backgroundColor: colors.primary },
-  secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary },
+  secondary: { backgroundColor: colors.primaryLight },
   danger: { backgroundColor: colors.danger },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
-  label: { fontSize: fontSize.md, fontWeight: '600' },
+  label: { fontSize: fontSize.md, fontWeight: '700' },
 });

@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SQLiteProvider } from 'expo-sqlite';
 import { DATABASE_NAME } from '@/core/constants/app.constants';
@@ -7,7 +7,14 @@ import { colors, spacing } from '@/core/theme/theme';
 import { initializeDatabase } from '@/database/database';
 import { AppButton } from '@/shared/components/AppButton';
 import { EmptyState } from '@/shared/components/StatusViews';
+import { BrandSplash } from './BrandSplash';
 import { SingleTabGuard } from './SingleTabGuard';
+
+/** Monté par SQLiteProvider seulement quand la base est prête : retire l'écran de démarrage. */
+function ReadySignal({ onReady }: { readonly onReady: () => void }) {
+  useEffect(onReady, [onReady]);
+  return null;
+}
 
 interface DatabaseProviderProps {
   readonly children: ReactNode;
@@ -20,6 +27,8 @@ interface DatabaseProviderProps {
 export function DatabaseProvider({ children }: DatabaseProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [ready, setReady] = useState(false);
+  const markReady = useCallback(() => setReady(true), []);
 
   const handleError = useCallback((caught: Error) => setError(toErrorMessage(caught)), []);
   const retry = useCallback(() => {
@@ -40,14 +49,19 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
 
   return (
     <SingleTabGuard>
-      <SQLiteProvider key={attempt} databaseName={DATABASE_NAME} onInit={initializeDatabase} onError={handleError}>
-        {children}
-      </SQLiteProvider>
+      <View style={styles.root}>
+        <SQLiteProvider key={attempt} databaseName={DATABASE_NAME} onInit={initializeDatabase} onError={handleError}>
+          <ReadySignal onReady={markReady} />
+          {children}
+        </SQLiteProvider>
+        {ready ? null : <BrandSplash />}
+      </View>
     </SingleTabGuard>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   screen: { flex: 1, backgroundColor: colors.background, justifyContent: 'center' },
   actions: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },
 });

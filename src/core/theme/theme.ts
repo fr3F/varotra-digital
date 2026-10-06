@@ -1,14 +1,22 @@
+/**
+ * Thème « Bite » : rouge bordeaux (marque), blanc, accent jaune ; boutons et barre d'onglets en pilule.
+ */
 export const colors = {
-  primary: '#0F766E',
-  primaryDark: '#115E59',
-  primaryLight: '#CCFBF1',
-  background: '#F5F7F6',
+  primary: '#A3161D',
+  primaryDark: '#7D0F14',
+  primaryLight: '#FBE9EA',
+  /** Accent jaune (bandeaux, promotions). */
+  accent: '#FFB01F',
+  accentLight: '#FFF4DE',
+  background: '#F6F6F6',
   surface: '#FFFFFF',
-  text: '#1F2933',
-  textMuted: '#6B7280',
-  border: '#E5E7EB',
-  danger: '#B91C1C',
-  dangerLight: '#FEE2E2',
+  /** Champs de saisie et puces non sélectionnées (gris clair du modèle). */
+  field: '#F1F1F3',
+  text: '#1C1C1E',
+  textMuted: '#7A7A80',
+  border: '#ECECEE',
+  danger: '#C2410C',
+  dangerLight: '#FFEDD5',
   warning: '#B45309',
   warningLight: '#FEF3C7',
   success: '#15803D',
@@ -16,9 +24,18 @@ export const colors = {
   info: '#1D4ED8',
   infoLight: '#DBEAFE',
   onPrimary: '#FFFFFF',
-  /** Marques des graphiques (teinte de la marque, saturation validée pour la lisibilité). */
-  chart: '#0D9488',
+  /** Marques des graphiques (teinte de la marque). */
+  chart: '#A3161D',
   chartAxis: '#D1D5DB',
+} as const;
+
+/** Ombre douce des cartes (iOS : shadow*, Android : elevation). */
+export const shadow = {
+  shadowColor: '#000000',
+  shadowOpacity: 0.06,
+  shadowRadius: 10,
+  shadowOffset: { width: 0, height: 3 },
+  elevation: 2,
 } as const;
 
 export const spacing = {
