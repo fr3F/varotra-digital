@@ -147,8 +147,9 @@ export function createRepositories(db: SqlDb) {
         await db.batch([
           { sql: 'DELETE FROM catalog_products', params: [] },
           ...products.map((p) => ({
-            sql: 'INSERT INTO catalog_products (id, name, sku, unit_price, available, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-            params: [p.id, p.name, p.sku, p.unitPrice, p.available, timestamp],
+            sql: `INSERT INTO catalog_products (id, name, sku, unit_price, available, description, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            params: [p.id, p.name, p.sku, p.unitPrice, p.available, p.description, timestamp],
           })),
         ]);
       },
@@ -160,6 +161,7 @@ export function createRepositories(db: SqlDb) {
           sku: readNullableString(row, 'sku'),
           unitPrice: readNumber(row, 'unit_price'),
           available: readNumber(row, 'available'),
+          description: readNullableString(row, 'description'),
         }));
       },
     },
@@ -175,6 +177,23 @@ export function createRepositories(db: SqlDb) {
               state: parseState(readString(row, 'state_json')),
               lastCustomerMessageAt: readNullableString(row, 'last_customer_message_at'),
             };
+      },
+      /** Conversations dont le dernier message client date de [from, to] et pas encore relancées depuis. */
+      async findReminderCandidates(from: string, to: string): Promise<Conversation[]> {
+        const rows = await db.all(
+          `SELECT * FROM conversations WHERE last_customer_message_at BETWEEN ? AND ?
+             AND (reminded_at IS NULL OR reminded_at < last_customer_message_at)`,
+          [from, to],
+        );
+        return rows.map((row) => ({
+          psid: readString(row, 'psid'),
+          customerName: readNullableString(row, 'customer_name'),
+          state: parseState(readString(row, 'state_json')),
+          lastCustomerMessageAt: readNullableString(row, 'last_customer_message_at'),
+        }));
+      },
+      async markReminded(psid: string, at: string): Promise<void> {
+        await db.run('UPDATE conversations SET reminded_at = ? WHERE psid = ?', [at, psid]);
       },
       async save(conversation: Conversation): Promise<void> {
         await db.run(
@@ -244,6 +263,17 @@ export function createRepositories(db: SqlDb) {
         return toDraft(row);
       },
       /** Commandes pas encore confirmées comme reçues par l'application. */
+      /** Produits les plus commandés sur Messenger depuis `since` (quantités cumulées), du plus au moins demandé. */
+      async popularProductIds(since: string, limit: number): Promise<string[]> {
+        const rows = await db.all('SELECT items_json FROM order_drafts WHERE created_at >= ?', [since]);
+        const totals = new Map<string, number>();
+        for (const row of rows) {
+          for (const item of parseItems(readString(row, 'items_json'))) {
+            totals.set(item.productId, (totals.get(item.productId) ?? 0) + item.quantity);
+          }
+        }
+        return [...totals].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([id]) => id);
+      },
       async findPending(): Promise<OrderDraft[]> {
         const rows = await db.all('SELECT * FROM order_drafts WHERE delivered_at IS NULL ORDER BY created_at ASC');
         return rows.map(toDraft);

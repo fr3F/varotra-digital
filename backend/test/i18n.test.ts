@@ -50,7 +50,7 @@ describe('textes du bot dans chaque langue', () => {
         messages.productsHeader(1, 3),
         messages.onlyInStock(3),
         messages.noted(2, 'Kiraro'),
-        messages.howMany('Kiraro', '12 000 Ar'),
+        messages.howMany('Kiraro', '12 000 Ar', ['Cuir']),
         messages.notRecognized(['xyz']),
         messages.receipt('MSG-1', '• 2 × Kiraro', '24 000 Ar'),
         messages.rawSent('MSG-1'),

@@ -9,6 +9,8 @@ export interface CatalogProduct {
   readonly unitPrice: number;
   /** Quantité disponible au moment du dernier envoi (stock - réservations). */
   readonly available: number;
+  /** Description saisie dans l'application (argument de vente montré au client), ou null. */
+  readonly description: string | null;
 }
 
 export interface CartItem {

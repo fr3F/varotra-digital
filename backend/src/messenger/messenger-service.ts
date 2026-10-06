@@ -13,6 +13,14 @@ interface Logger {
   error(message: string): void;
 }
 
+/** Produits mis en avant (⭐) : les plus commandés sur Messenger ces 30 derniers jours. */
+export const POPULAR_COUNT = 3;
+const POPULARITY_DAYS = 30;
+
+export function popularitySince(now: Date = new Date()): string {
+  return new Date(now.getTime() - POPULARITY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
 /** Conversation avec les clients : messages reçus → panier → commande, avec les réponses du bot. */
 export function createMessengerService(deps: {
   readonly repos: Repositories;
@@ -56,7 +64,11 @@ export function createMessengerService(deps: {
           return;
         }
 
-        const result = handleMessage(state, event.message, { catalog: await repos.catalog.findAll(), customerName });
+        const result = handleMessage(state, event.message, {
+          catalog: await repos.catalog.findAll(),
+          customerName,
+          popularIds: await repos.drafts.popularProductIds(popularitySince(), POPULAR_COUNT),
+        });
         await repos.conversations.save({ psid: event.psid, customerName, state: result.state, lastCustomerMessageAt });
 
         for (const reply of result.replies) {

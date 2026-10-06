@@ -70,7 +70,8 @@ export interface Messages {
   readonly allSoldOut: string;
   readonly cannotValidate: string;
   readonly noted: (quantity: number, productName: string) => string;
-  readonly howMany: (productName: string, price: string) => string;
+  /** `details` : description, ⭐, 🔥… affichés entre le prix et la question. */
+  readonly howMany: (productName: string, price: string, details: readonly string[]) => string;
   readonly cartCleared: string;
   readonly notRecognized: (parts: readonly string[]) => string;
   readonly notUnderstood: string;
@@ -88,6 +89,16 @@ export interface Messages {
   readonly cancelled: (reference: string) => string;
   readonly statusLabels: Readonly<Record<'RECEIVED' | 'CONFIRMED' | 'UNAVAILABLE' | 'PREPARING' | 'DELIVERED' | 'CANCELLED', string>>;
   readonly statusInquiry: (reference: string, total: string, label: string) => string;
+  /** Vente : badges et arguments, toujours fondés sur des données réelles (ventes, stock, description). */
+  readonly sales: {
+    readonly lowStockTag: (available: number) => string;
+    readonly legend: string;
+    readonly popularLine: string;
+    readonly lowStockLine: (available: number) => string;
+    readonly suggestion: (names: string) => string;
+    readonly nudge: string;
+    readonly cartWaiting: string;
+  };
 }
 
 export const MESSAGES: Readonly<Record<Lang, Messages>> = {
@@ -104,7 +115,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
       newOrder: '🛒 Nouvelle commande',
     },
     welcome: (name) =>
-      `${name === null ? 'Bonjour 👋' : `Bonjour ${name} 👋`}\nChoisissez un produit ci-dessous, ou écrivez directement votre commande, par exemple : « 2 huile tiko et 1 savon ».`,
+      `${name === null ? 'Bonjour 👋' : `Bonjour ${name} 👋`} Bienvenue !\nCommandez ici en 1 minute : choisissez un produit ci-dessous, ou écrivez simplement votre commande, par exemple « 2 huile tiko et 1 savon ».`,
     productsHeader: (page, count) => (count > 1 ? `Nos produits (${page}/${count}) :` : 'Nos produits :'),
     noProducts: 'Aucun produit n’est disponible pour le moment. Écrivez votre demande : le vendeur vous répondra.',
     productUnavailable: 'Désolé, ce produit n’est plus disponible.',
@@ -118,7 +129,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     allSoldOut: 'Désolé, ces produits sont épuisés pour le moment.',
     cannotValidate: 'Impossible de valider : stock insuffisant.',
     noted: (quantity, name) => `C’est noté : ${quantity} × ${name}.`,
-    howMany: (name, price) => `${name} — ${price}\nCombien en voulez-vous ? (ou écrivez un nombre)`,
+    howMany: (name, price, details) => `${name} — ${price}${details.map((line) => `\n${line}`).join('')}\nCombien en voulez-vous ? (ou écrivez un nombre)`,
     cartCleared: 'Votre panier a été vidé. Écrivez « menu » pour recommencer.',
     notRecognized: (parts) => `Je n’ai pas reconnu : « ${parts.join(' », « ')} ».`,
     notUnderstood: 'Je n’ai pas bien compris 🙏 Choisissez un produit dans la liste, ou envoyez votre message tel quel au vendeur.',
@@ -144,6 +155,15 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
       CANCELLED: 'annulée',
     },
     statusInquiry: (reference, total, label) => `Votre commande ${reference} (${total}) est ${label}.`,
+    sales: {
+      lowStockTag: (available) => `🔥 plus que ${available}`,
+      legend: '⭐ = les plus demandés',
+      popularLine: '⭐ Très demandé en ce moment',
+      lowStockLine: (available) => `🔥 Plus que ${available} en stock`,
+      suggestion: (names) => `💡 Souvent pris avec : ${names}`,
+      nudge: '👉 Validez maintenant : le vendeur prépare votre commande dès confirmation.',
+      cartWaiting: 'Votre panier vous attend 🛒 Il ne reste qu’à valider !',
+    },
   },
 
   mg: {
@@ -159,7 +179,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
       newOrder: '🛒 Kaomandy vaovao',
     },
     welcome: (name) =>
-      `${name === null ? 'Manao ahoana 👋' : `Manao ahoana ${name} 👋`}\nSafidio eto ambany ny entana tianao, na soraty mivantana ny kaomandinao, ohatra : « Mila huile tiko 2 sy savon 1 ».`,
+      `${name === null ? 'Manao ahoana 👋' : `Manao ahoana ${name} 👋`} Tongasoa !\nMora sy haingana ny manafatra eto : safidio eto ambany ny entana tianao, na soraty fotsiny ny kaomandinao, ohatra « Mila huile tiko 2 sy savon 1 ».`,
     productsHeader: (page, count) => (count > 1 ? `Ny entanay (${page}/${count}) :` : 'Ny entanay :'),
     noProducts: 'Tsy misy entana azo vidiana amin’izao fotoana izao. Soraty ny filanao fa hamaly anao ny mpivarotra.',
     productUnavailable: 'Miala tsiny, tsy misy intsony io entana io.',
@@ -173,7 +193,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     allSoldOut: 'Miala tsiny, lany daholo ireo entana ireo amin’izao.',
     cannotValidate: 'Tsy azo hamafisina : tsy ampy ny tahiry.',
     noted: (quantity, name) => `Voaray : ${quantity} × ${name}.`,
-    howMany: (name, price) => `${name} — ${price}\nFiry no ilainao ? (na soraty ny isa)`,
+    howMany: (name, price, details) => `${name} — ${price}${details.map((line) => `\n${line}`).join('')}\nFiry no ilainao ? (na soraty ny isa)`,
     cartCleared: 'Voafafa ny haronao. Soraty hoe « menu » raha hanomboka indray.',
     notRecognized: (parts) => `Tsy fantatro : « ${parts.join(' », « ')} ».`,
     notUnderstood: 'Tsy azoko tsara 🙏 Mifidiana entana ao amin’ny lisitra, na alefaso amin’ny mpivarotra ny hafatrao.',
@@ -199,6 +219,15 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
       CANCELLED: 'nofoanana',
     },
     statusInquiry: (reference, total, label) => `Ny kaomandinao ${reference} (${total}) : ${label}.`,
+    sales: {
+      lowStockTag: (available) => `🔥 ${available} sisa`,
+      legend: '⭐ = be mpividy indrindra',
+      popularLine: '⭐ Be mpividy amin’izao',
+      lowStockLine: (available) => `🔥 ${available} sisa no misy`,
+      suggestion: (names) => `💡 Matetika miaraka amin’ny : ${names}`,
+      nudge: '👉 Hamafiso izao dia hanomana ny kaomandinao avy hatrany ny mpivarotra.',
+      cartWaiting: 'Mbola miandry anao ny haronao 🛒 Hamafiso fotsiny dia vita !',
+    },
   },
 
   en: {
@@ -214,7 +243,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
       newOrder: '🛒 New order',
     },
     welcome: (name) =>
-      `${name === null ? 'Hello 👋' : `Hello ${name} 👋`}\nPick a product below, or type your order directly, for example: “2 huile tiko and 1 savon”.`,
+      `${name === null ? 'Hello 👋' : `Hello ${name} 👋`} Welcome!\nOrder here in 1 minute: pick a product below, or simply type your order, for example “2 huile tiko and 1 savon”.`,
     productsHeader: (page, count) => (count > 1 ? `Our products (${page}/${count}):` : 'Our products:'),
     noProducts: 'No products are available right now. Write your request and the seller will reply.',
     productUnavailable: 'Sorry, this product is no longer available.',
@@ -228,7 +257,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     allSoldOut: 'Sorry, these products are sold out for now.',
     cannotValidate: 'Cannot confirm: not enough stock.',
     noted: (quantity, name) => `Noted: ${quantity} × ${name}.`,
-    howMany: (name, price) => `${name} — ${price}\nHow many would you like? (or type a number)`,
+    howMany: (name, price, details) => `${name} — ${price}${details.map((line) => `\n${line}`).join('')}\nHow many would you like? (or type a number)`,
     cartCleared: 'Your cart has been emptied. Type “menu” to start again.',
     notRecognized: (parts) => `I didn’t recognize: “${parts.join('”, “')}”.`,
     notUnderstood: 'Sorry, I didn’t understand 🙏 Pick a product from the list, or send your message as is to the seller.',
@@ -254,5 +283,14 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
       CANCELLED: 'cancelled',
     },
     statusInquiry: (reference, total, label) => `Your order ${reference} (${total}) is ${label}.`,
+    sales: {
+      lowStockTag: (available) => `🔥 only ${available} left`,
+      legend: '⭐ = best sellers',
+      popularLine: '⭐ Popular right now',
+      lowStockLine: (available) => `🔥 Only ${available} left in stock`,
+      suggestion: (names) => `💡 Often bought with: ${names}`,
+      nudge: '👉 Confirm now and the seller will prepare your order right away.',
+      cartWaiting: 'Your cart is waiting 🛒 Just confirm it and you’re done!',
+    },
   },
 };

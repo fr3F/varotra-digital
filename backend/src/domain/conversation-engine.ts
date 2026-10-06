@@ -25,6 +25,26 @@ export interface EngineContext {
   /** Catalogue envoyé par l'application (produits et quantités disponibles). */
   readonly catalog: readonly CatalogProduct[];
   readonly customerName: string | null;
+  /** Produits les plus commandés récemment (réels), du plus au moins demandé. */
+  readonly popularIds?: readonly string[];
+}
+
+/** En dessous de ce stock, le client est prévenu qu'il en reste peu (vrai chiffre, jamais inventé). */
+const LOW_STOCK = 3;
+/** Produits proposés en plus dans le panier. */
+const MAX_SUGGESTIONS = 2;
+
+function isPopular(ctx: EngineContext, productId: string): boolean {
+  return (ctx.popularIds ?? []).includes(productId);
+}
+
+/** Les plus demandés d'abord (dans l'ordre des ventes), puis les autres dans l'ordre du catalogue. */
+function byPopularity(ctx: EngineContext, products: readonly CatalogProduct[]): CatalogProduct[] {
+  const rank = (product: CatalogProduct) => {
+    const index = (ctx.popularIds ?? []).indexOf(product.id);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  return [...products].sort((a, b) => rank(a) - rank(b));
 }
 
 export interface OrderRequest {
@@ -130,7 +150,7 @@ function exceedsStock(items: readonly DraftItem[], catalog: readonly CatalogProd
 }
 
 function productMenu(state: ConversationState, ctx: EngineContext, page: number, intro?: string): EngineResult {
-  const products = availableProducts(ctx.catalog);
+  const products = byPopularity(ctx, availableProducts(ctx.catalog));
   if (products.length === 0) {
     return {
       state: { ...state, step: { kind: 'IDLE' } },
@@ -145,7 +165,16 @@ function productMenu(state: ConversationState, ctx: EngineContext, page: number,
   const pageCount = Math.ceil(products.length / PAGE_SIZE);
   const current = Math.min(Math.max(page, 0), pageCount - 1);
   const visible = products.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
-  const list = visible.map((product) => `• ${product.name} — ${formatMoney(product.unitPrice)}`).join('\n');
+  const list = visible
+    .map((product) => {
+      const tags = [
+        isPopular(ctx, product.id) ? '⭐' : null,
+        product.available <= LOW_STOCK ? t(state).sales.lowStockTag(product.available) : null,
+      ].filter((tag): tag is string => tag !== null);
+      return `• ${product.name} — ${formatMoney(product.unitPrice)}${tags.length > 0 ? ` ${tags.join(' ')}` : ''}`;
+    })
+    .join('\n');
+  const legend = visible.some((product) => isPopular(ctx, product.id)) ? `\n${t(state).sales.legend}` : '';
   const quickReplies: QuickReply[] = visible.map((product) => ({
     title: truncate(product.name, 20),
     payload: PAYLOADS.product(product.id),
@@ -163,7 +192,7 @@ function productMenu(state: ConversationState, ctx: EngineContext, page: number,
   const header = t(state).productsHeader(current + 1, pageCount);
   return {
     state: { ...state, step: { kind: 'CHOOSING_PRODUCT', page: current } },
-    replies: [{ text: `${intro === undefined ? '' : `${intro}\n\n`}${header}\n${list}`, quickReplies }],
+    replies: [{ text: `${intro === undefined ? '' : `${intro}\n\n`}${header}\n${list}${legend}`, quickReplies }],
   };
 }
 
@@ -181,13 +210,32 @@ function cartSummary(state: ConversationState, ctx: EngineContext, intro?: strin
   const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   // Stock vérifié avant validation : un panier qui dépasse le stock ne peut pas être validé.
   const shortage = exceedsStock(items, ctx.catalog);
-  const stockNote = shortage ? `\n\n${t(state).stockShortage}` : '';
+  // Panier valide : produits complémentaires (les plus demandés d'abord) et invitation à valider.
+  const suggestions = shortage
+    ? []
+    : byPopularity(ctx, availableProducts(ctx.catalog))
+        .filter((product) => !state.cart.some((item) => item.productId === product.id))
+        .slice(0, MAX_SUGGESTIONS);
+  const notes = shortage
+    ? [t(state).stockShortage]
+    : [
+        suggestions.length > 0
+          ? t(state).sales.suggestion(suggestions.map((product) => `${product.name} (${formatMoney(product.unitPrice)})`).join(', '))
+          : null,
+        t(state).sales.nudge,
+      ].filter((note): note is string => note !== null);
+  const quickReplies: QuickReply[] = [
+    action(state.lang, shortage ? 'adjust' : 'checkout'),
+    ...suggestions.map((product) => ({ title: truncate(`➕ ${product.name}`, 20), payload: PAYLOADS.product(product.id) })),
+    action(state.lang, 'more'),
+    action(state.lang, 'cancel'),
+  ];
   return {
     state: { ...state, step: { kind: 'CART' } },
     replies: [
       {
-        text: `${intro === undefined ? '' : `${intro}\n\n`}${t(state).cartTitle}\n${lines.join('\n')}\n${t(state).total(formatMoney(total))}${stockNote}`,
-        quickReplies: [shortage ? 'adjust' : 'checkout', 'more', 'cancel'].map((key) => action(state.lang, key as ActionKey)),
+        text: `${intro === undefined ? '' : `${intro}\n\n`}${t(state).cartTitle}\n${lines.join('\n')}\n${t(state).total(formatMoney(total))}\n\n${notes.join('\n')}`,
+        quickReplies,
       },
     ],
   };
@@ -203,7 +251,15 @@ function askQuantity(state: ConversationState, ctx: EngineContext, productId: st
     state: { ...state, step: { kind: 'CHOOSING_QUANTITY', productId } },
     replies: [
       {
-        text: t(state).howMany(product.name, formatMoney(product.unitPrice)),
+        text: t(state).howMany(
+          product.name,
+          formatMoney(product.unitPrice),
+          [
+            product.description,
+            isPopular(ctx, product.id) ? t(state).sales.popularLine : null,
+            product.available <= LOW_STOCK ? t(state).sales.lowStockLine(product.available) : null,
+          ].filter((line): line is string => line !== null),
+        ),
         quickReplies: choices.map((quantity) => ({ title: String(quantity), payload: PAYLOADS.quantity(quantity) })),
       },
     ],
@@ -369,4 +425,15 @@ export function confirmationReply(draft: OrderDraft, lang: Lang): OutgoingReply 
   const total = draft.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const lines = draft.items.map((item) => `• ${item.quantity} × ${item.productName}`).join('\n');
   return { text: messages.receipt(draft.reference, lines, formatMoney(total)) };
+}
+
+/**
+ * Relance d'un panier abandonné (une seule fois, dans les 24 h de Messenger) : rappel du panier
+ * dans la langue du client, ou null si le panier est vide.
+ */
+export function cartReminder(state: ConversationState, ctx: EngineContext): OutgoingReply | null {
+  if (cartItems(state.cart, ctx.catalog).length === 0) {
+    return null;
+  }
+  return cartSummary(state, ctx, t(state).sales.cartWaiting).replies[0] ?? null;
 }

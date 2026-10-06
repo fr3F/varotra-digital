@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { handleMessage, type IncomingMessage, PAYLOADS } from '../src/domain/conversation-engine.ts';
+import { cartReminder, handleMessage, type IncomingMessage, PAYLOADS } from '../src/domain/conversation-engine.ts';
 import { type CatalogProduct, type ConversationState, INITIAL_CONVERSATION } from '../src/domain/types.ts';
 
 const catalog: CatalogProduct[] = [
-  { id: 'huile', name: 'Huile Tiko 1L', sku: null, unitPrice: 9500, available: 3 },
-  { id: 'savon', name: 'Savon Nosy', sku: null, unitPrice: 1500, available: 20 },
-  { id: 'riz', name: 'Riz Makalioka', sku: null, unitPrice: 4000, available: 0 },
+  { id: 'huile', name: 'Huile Tiko 1L', sku: null, unitPrice: 9500, available: 3, description: null },
+  { id: 'savon', name: 'Savon Nosy', sku: null, unitPrice: 1500, available: 20, description: null },
+  { id: 'riz', name: 'Riz Makalioka', sku: null, unitPrice: 4000, available: 0, description: null },
 ];
 const ctx = { catalog, customerName: 'Rasoa' };
 
@@ -92,6 +92,54 @@ describe('vérification du stock avant validation', () => {
     const text = result.replies[0]?.text ?? '';
     assert.match(text, /2 × Huile Tiko 1L/);
     assert.doesNotMatch(text, /Riz/);
+  });
+});
+
+describe('bot vendeur (arguments réels)', () => {
+  const salesCatalog: CatalogProduct[] = [
+    { id: 'kiraro', name: 'Kiraro', sku: null, unitPrice: 12000, available: 10, description: 'Cuir véritable, tailles 38 à 44.' },
+    { id: 'satroka', name: 'Satroka', sku: null, unitPrice: 2000, available: 2, description: null },
+    { id: 'akanjo', name: 'Akanjo', sku: null, unitPrice: 15000, available: 8, description: null },
+  ];
+  const sales = { catalog: salesCatalog, customerName: 'Rasoa', popularIds: ['akanjo'] };
+  const say = (messages: IncomingMessage[]) => {
+    let state = INITIAL_CONVERSATION;
+    let result = handleMessage(state, messages[0] ?? { kind: 'UNSUPPORTED' }, sales);
+    for (const message of messages.slice(1)) {
+      state = result.state;
+      result = handleMessage(state, message, sales);
+    }
+    return result;
+  };
+
+  it('menu : les plus demandés en premier (⭐) et stock faible signalé (🔥)', () => {
+    const reply = say([{ kind: 'POSTBACK', payload: PAYLOADS.getStarted }]).replies[0];
+    assert.match(reply?.text ?? '', /Bienvenue/);
+    assert.match(reply?.text ?? '', /Nos produits :\n• Akanjo — 15\D000\sAr ⭐\n• Kiraro/);
+    assert.match(reply?.text ?? '', /Satroka — 2\D000\sAr 🔥 plus que 2/);
+    assert.match(reply?.text ?? '', /⭐ = les plus demandés/);
+    assert.equal(reply?.quickReplies?.[0]?.payload, PAYLOADS.product('akanjo'));
+  });
+
+  it('choix du produit : description et stock faible', () => {
+    assert.match(say([quick(PAYLOADS.product('kiraro'))]).replies[0]?.text ?? '', /Cuir véritable, tailles 38 à 44\./);
+    assert.match(say([quick(PAYLOADS.product('satroka'))]).replies[0]?.text ?? '', /🔥 Plus que 2 en stock/);
+    assert.match(say([quick(PAYLOADS.product('akanjo'))]).replies[0]?.text ?? '', /⭐ Très demandé en ce moment/);
+  });
+
+  it('panier : produits complémentaires et invitation à valider', () => {
+    const reply = say([{ kind: 'TEXT', text: 'Bonjour, je voudrais 1 kiraro' }]).replies[0];
+    assert.match(reply?.text ?? '', /💡 Souvent pris avec : Akanjo \(15\D000\sAr\), Satroka/);
+    assert.match(reply?.text ?? '', /👉 Validez maintenant/);
+    assert.deepEqual(reply?.quickReplies?.map((q) => q.payload), [
+      PAYLOADS.checkout, PAYLOADS.product('akanjo'), PAYLOADS.product('satroka'), PAYLOADS.menu, PAYLOADS.cancel,
+    ]);
+  });
+
+  it('relance : rappel du panier dans la langue du client, rien si le panier est vide', () => {
+    const cart = say([{ kind: 'TEXT', text: 'Salama, mila kiraro roa' }]).state;
+    assert.match(cartReminder(cart, sales)?.text ?? '', /^Mbola miandry anao ny haronao 🛒/);
+    assert.equal(cartReminder(INITIAL_CONVERSATION, sales), null);
   });
 });
 

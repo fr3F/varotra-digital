@@ -3,7 +3,7 @@
  * En production sur Cloudflare, le point d'entrée est src/worker.ts.
  */
 import { serve } from '@hono/node-server';
-import { buildApp } from './app.ts';
+import { buildApp, createScheduledJobs } from './app.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { openNodeDatabase } from './db/node-sqlite.ts';
 import { createRepositories } from './db/repositories.ts';
@@ -20,13 +20,17 @@ function main(): void {
   const queue = createTaskQueue();
   const log = (level: string) => (message: string) => console.log(`[${new Date().toISOString()}] ${level} ${message}`);
 
-  const app = buildApp({
+  const deps = {
     config,
     repos: createRepositories(db),
     messengerClient,
-    defer: (_c, task) => queue.push(task),
+    defer: (_c: unknown, task: () => Promise<void>) => queue.push(task),
     logger: { info: log('INFO'), error: log('ERREUR') },
-  });
+  };
+  const app = buildApp(deps);
+  // Même fréquence que le cron Cloudflare : relance des paniers abandonnés.
+  const jobs = createScheduledJobs(deps);
+  const timer = setInterval(() => queue.push(() => jobs.run()), 30 * 60 * 1000);
 
   if (!messengerClient.live) {
     console.warn('META_PAGE_ACCESS_TOKEN absent : mode simulation, aucune réponse n’est envoyée à Meta.');
@@ -40,6 +44,7 @@ function main(): void {
   });
 
   const shutdown = (): void => {
+    clearInterval(timer);
     server.close(() => {
       void queue.idle().then(() => {
         db.close();

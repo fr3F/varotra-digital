@@ -51,6 +51,7 @@ async function buildCatalog() {
     sku: product.sku,
     unitPrice: product.unitPrice,
     available: availableQuantity(product),
+    description: product.description,
   }));
 }
 
