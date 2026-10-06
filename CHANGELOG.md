@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 
 ## [Unreleased]
 
+### Modifié
+- Messenger : les nouvelles commandes arrivent dans l'application en 15 s au plus (au lieu de 60 s) tant qu'elle est ouverte.
+
 ## [0.1.0] - 2026-10-05
 
 Première version.
