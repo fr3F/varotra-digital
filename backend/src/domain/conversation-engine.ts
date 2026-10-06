@@ -45,6 +45,8 @@ export const PAYLOADS = {
   menu: 'MENU',
   cart: 'CART',
   checkout: 'CHECKOUT',
+  /** Ramène le panier aux quantités en stock (proposé à la place de « Valider » quand il manque du stock). */
+  adjust: 'ADJUST',
   cancel: 'CANCEL',
   sendRaw: 'SEND_RAW',
   page: (page: number) => `PAGE:${page}`,
@@ -62,8 +64,9 @@ const MENU_WORDS = new Set([
   'salama', 'manao', 'akory', 'vidiny', 'lisitra', 'entana',
 ]);
 
-const ACTIONS: Readonly<Record<'checkout' | 'more' | 'cancel' | 'menu' | 'sendRaw', QuickReply>> = {
+const ACTIONS: Readonly<Record<'checkout' | 'adjust' | 'more' | 'cancel' | 'menu' | 'sendRaw', QuickReply>> = {
   checkout: { title: '✅ Valider', payload: PAYLOADS.checkout },
+  adjust: { title: '✔️ Ajuster au stock', payload: PAYLOADS.adjust },
   more: { title: '➕ Autre produit', payload: PAYLOADS.menu },
   cancel: { title: '🗑️ Annuler', payload: PAYLOADS.cancel },
   menu: { title: '🛒 Voir les produits', payload: PAYLOADS.menu },
@@ -95,8 +98,12 @@ function cartItems(cart: readonly CartItem[], catalog: readonly CatalogProduct[]
   });
 }
 
+function availableOf(catalog: readonly CatalogProduct[], productId: string): number {
+  return findProduct(catalog, productId)?.available ?? 0;
+}
+
 function exceedsStock(items: readonly DraftItem[], catalog: readonly CatalogProduct[]): boolean {
-  return items.some((item) => item.quantity > (findProduct(catalog, item.productId)?.available ?? 0));
+  return items.some((item) => item.quantity > availableOf(catalog, item.productId));
 }
 
 function welcomeText(customerName: string | null): string {
@@ -148,20 +155,21 @@ function cartSummary(state: ConversationState, ctx: EngineContext, intro?: strin
     return productMenu({ ...state, cart: [] }, ctx, 0, intro ?? 'Votre panier est vide.');
   }
   const lines = items.map((item) => {
-    const available = findProduct(ctx.catalog, item.productId)?.available ?? 0;
-    const warning = item.quantity > available ? ` ⚠️ stock : ${available}` : '';
+    const available = availableOf(ctx.catalog, item.productId);
+    const warning =
+      item.quantity <= available ? '' : available === 0 ? ' ⚠️ épuisé' : ` ⚠️ seulement ${available} en stock`;
     return `• ${item.quantity} × ${item.productName} — ${formatMoney(item.quantity * item.unitPrice)}${warning}`;
   });
   const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  const stockNote = exceedsStock(items, ctx.catalog)
-    ? '\n⚠️ Certaines quantités dépassent le stock disponible : le vendeur vous confirmera.'
-    : '';
+  // Stock vérifié avant validation : un panier qui dépasse le stock ne peut pas être validé.
+  const shortage = exceedsStock(items, ctx.catalog);
+  const stockNote = shortage ? '\n\n⚠️ Stock insuffisant : ajustez votre panier pour pouvoir le valider.' : '';
   return {
     state: { ...state, step: { kind: 'CART' } },
     replies: [
       {
         text: `${intro === undefined ? '' : `${intro}\n\n`}Votre panier :\n${lines.join('\n')}\nTotal : ${formatMoney(total)}${stockNote}`,
-        quickReplies: [ACTIONS.checkout, ACTIONS.more, ACTIONS.cancel],
+        quickReplies: shortage ? [ACTIONS.adjust, ACTIONS.more, ACTIONS.cancel] : [ACTIONS.checkout, ACTIONS.more, ACTIONS.cancel],
       },
     ],
   };
@@ -192,10 +200,26 @@ function addQuantity(state: ConversationState, ctx: EngineContext, productId: st
   return cartSummary({ ...state, cart: addToCart(state.cart, productId, quantity) }, ctx, `C’est noté : ${quantity} × ${product.name}.`);
 }
 
+/** Chaque ligne ramenée au stock disponible ; les produits épuisés sont retirés du panier. */
+function adjustToStock(state: ConversationState, ctx: EngineContext): EngineResult {
+  const cart = state.cart.flatMap((item) => {
+    const quantity = Math.min(item.quantity, availableOf(ctx.catalog, item.productId));
+    return quantity > 0 ? [{ ...item, quantity }] : [];
+  });
+  if (cart.length === 0) {
+    return productMenu({ ...state, cart: [] }, ctx, 0, 'Désolé, ces produits sont épuisés pour le moment.');
+  }
+  return cartSummary({ ...state, cart }, ctx, 'Panier ajusté au stock disponible 👍');
+}
+
 function checkout(state: ConversationState, ctx: EngineContext): EngineResult {
   const items = cartItems(state.cart, ctx.catalog);
   if (items.length === 0) {
     return productMenu({ ...state, cart: [] }, ctx, 0, 'Votre panier est vide.');
+  }
+  // Ancien bouton « Valider » ou stock modifié entre-temps : rien n'est commandé au-delà du stock.
+  if (exceedsStock(items, ctx.catalog)) {
+    return cartSummary(state, ctx, 'Impossible de valider : stock insuffisant.');
   }
   return {
     state: INITIAL_CONVERSATION,
@@ -228,6 +252,8 @@ function handlePayload(payload: string, state: ConversationState, ctx: EngineCon
       return cartSummary(state, ctx);
     case PAYLOADS.checkout:
       return checkout(state, ctx);
+    case PAYLOADS.adjust:
+      return adjustToStock(state, ctx);
     case PAYLOADS.cancel:
       return {
         state: INITIAL_CONVERSATION,

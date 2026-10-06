@@ -48,16 +48,49 @@ describe('conversation guidée', () => {
     assert.deepEqual(result.state, INITIAL_CONVERSATION);
   });
 
-  it('accepte une quantité tapée au clavier, et signale un dépassement de stock', () => {
-    const result = converse([quick(PAYLOADS.product('huile')), { kind: 'TEXT', text: '5' }, quick(PAYLOADS.checkout)]);
-    assert.equal(result.order?.items[0]?.quantity, 5);
-    assert.equal(result.order?.needsReview, true);
+  it('accepte une quantité tapée au clavier', () => {
+    const result = converse([quick(PAYLOADS.product('huile')), { kind: 'TEXT', text: '2' }, quick(PAYLOADS.checkout)]);
+    assert.equal(result.order?.items[0]?.quantity, 2);
+    assert.equal(result.order?.needsReview, false);
   });
 
   it('annule le panier', () => {
     const result = converse([quick(PAYLOADS.product('savon')), quick(PAYLOADS.quantity(1)), quick(PAYLOADS.cancel)]);
     assert.equal(result.order, undefined);
     assert.deepEqual(result.state.cart, []);
+  });
+});
+
+describe('vérification du stock avant validation', () => {
+  it('au-delà du stock : pas de bouton « Valider », proposition d’ajuster', () => {
+    const cart = converse([{ kind: 'TEXT', text: 'mila huile tiko 50' }]);
+    const reply = cart.replies[0];
+    assert.match(reply?.text ?? '', /50 × Huile Tiko 1L — .* ⚠️ seulement 3 en stock/);
+    assert.match(reply?.text ?? '', /Stock insuffisant : ajustez votre panier/);
+    assert.deepEqual(reply?.quickReplies?.map((q) => q.payload), [PAYLOADS.adjust, PAYLOADS.menu, PAYLOADS.cancel]);
+  });
+
+  it('« Ajuster au stock » ramène la quantité au disponible, puis la commande est possible', () => {
+    const adjusted = converse([{ kind: 'TEXT', text: 'mila huile tiko 50' }, quick(PAYLOADS.adjust)]);
+    assert.match(adjusted.replies[0]?.text ?? '', /Panier ajusté[\s\S]*3 × Huile Tiko 1L/);
+    assert.equal(adjusted.replies[0]?.quickReplies?.[0]?.payload, PAYLOADS.checkout);
+
+    const result = converse([{ kind: 'TEXT', text: 'mila huile tiko 50' }, quick(PAYLOADS.adjust), quick(PAYLOADS.checkout)]);
+    assert.equal(result.order?.items[0]?.quantity, 3);
+    assert.equal(result.order?.needsReview, false);
+  });
+
+  it('un ancien bouton « Valider » ne crée pas de commande au-delà du stock', () => {
+    const result = converse([{ kind: 'TEXT', text: 'mila huile tiko 50' }, quick(PAYLOADS.checkout)]);
+    assert.equal(result.order, undefined);
+    assert.match(result.replies[0]?.text ?? '', /Impossible de valider/);
+  });
+
+  it('produit épuisé : retiré du panier à l’ajustement', () => {
+    const result = converse([{ kind: 'TEXT', text: 'mila huile tiko 2 sy riz makalioka 4' }, quick(PAYLOADS.adjust)]);
+    const text = result.replies[0]?.text ?? '';
+    assert.match(text, /2 × Huile Tiko 1L/);
+    assert.doesNotMatch(text, /Riz/);
   });
 });
 

@@ -37,6 +37,7 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
+      - run: npm install -g npm@11.6.2  # même npm qu'en local : le lock file en dépend
       - run: npm ci
       - name: Migrations D1
         run: npx wrangler d1 migrations apply carnet-backend --remote

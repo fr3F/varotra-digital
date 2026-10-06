@@ -1,0 +1,42 @@
+# Mises à jour proposées chaque semaine sous forme de Pull Request vers develop.
+# Paquets Expo / React Native exclus : ils suivent le SDK (npx expo install --fix).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    ignore:
+      - dependency-name: 'expo*'
+      - dependency-name: '@expo/*'
+      - dependency-name: 'react'
+      - dependency-name: 'react-dom'
+      - dependency-name: 'react-native*'
+      - dependency-name: '@react-native/*'
+    groups:
+      outils-dev:
+        dependency-type: development
+  - package-ecosystem: npm
+    directory: /backend
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      serveur:
+        patterns: ['*']
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci

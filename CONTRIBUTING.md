@@ -38,6 +38,7 @@ La CI GitHub relance ces vérifications ; une PR ne se fusionne que si elle est 
 - Écrans dans `src/app/` uniquement ; la logique dans `services/`, l'accès SQLite dans `database/repositories/`.
 - Nouvelle table ou colonne : **nouvelle migration** (`src/database/migrations/00X_*.ts` ou `backend/migrations/000X_*.sql`), ne jamais modifier une migration déjà publiée.
 - Paquets Expo : `npx expo install <paquet>` (versions compatibles SDK).
+- npm **11.6.2** (`npm install -g npm@11.6.2`) : une autre version réécrit `package-lock.json` différemment et casse `npm ci` dans la CI.
 
 ## Secrets
 
@@ -50,7 +51,11 @@ Ils sont ignorés par `.gitignore`. En cas de fuite : régénérer le secret che
 |---|---|---|
 | `ci.yml` | Chaque Pull Request, push sur `main` / `develop` | Lint + typecheck de l'application ; tests + typecheck du serveur |
 | `deploy-backend.yml` | Fusion dans `main` touchant `backend/` (ou lancement manuel) | CI, puis migrations D1 et déploiement Cloudflare, puis vérification `/health` |
+| `quality.yml` | Chaque Pull Request, push sur `main` / `develop` | Titre de PR (Conventional Commits), lint sans avertissement, couverture serveur (≥ 90 % lignes, ≥ 75 % branches), `expo-doctor`, `npm audit`, recherche de secrets (gitleaks) |
+| `codeql.yml` | PR, push, chaque lundi | Analyse de sécurité CodeQL (Security › Code scanning) |
 | `release.yml` | Push d'un tag `vX.Y.Z` | CI, contrôle des versions, release GitHub (notes du CHANGELOG), APK EAS joint |
+
+Dependabot (`.github/dependabot.yml`) propose chaque semaine les mises à jour des dépendances (hors paquets Expo / React Native, qui suivent le SDK) vers `develop`.
 
 Secrets du dépôt (Settings › Secrets and variables › Actions) : `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `EXPO_TOKEN`.
 L'environnement GitHub `production` peut exiger une approbation avant chaque déploiement.
