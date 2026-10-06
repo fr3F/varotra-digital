@@ -15,6 +15,7 @@ import { notificationPreferencesStore, notificationService } from '@/services/no
 import { AppButton } from '@/shared/components/AppButton';
 import { ErrorBanner } from '@/shared/components/StatusViews';
 import { DangerZoneSection } from './DangerZoneSection';
+import { LanguageSection } from './LanguageSection';
 import { MessengerSettingsSection } from './MessengerSettingsSection';
 
 const PERMISSION_TEXTS: Readonly<Record<NotificationPermission, { title: string; message: string }>> = {
@@ -68,6 +69,7 @@ export function NotificationSettingsScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: 'Réglages' }} />
+      <LanguageSection />
       <MessengerSettingsSection />
       <Text style={styles.sectionTitle}>Notifications</Text>
       <ErrorBanner message={error} />
