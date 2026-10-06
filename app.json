@@ -47,7 +47,8 @@
         {
           "color": "#0F766E"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "scheme": "carnetdigital",
     "experiments": {
