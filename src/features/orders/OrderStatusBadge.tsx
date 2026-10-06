@@ -8,7 +8,7 @@ import { ORDER_STATUS_COLORS } from './order-labels';
 /** Une icône par statut : le statut se reconnaît sans lire. */
 const STATUS_ICONS: Readonly<Record<OrderStatus, ComponentProps<typeof Ionicons>['name']>> = {
   NEW: 'sparkles',
-  PREPARING: 'cube',
+  PREPARING: 'hourglass',
   CONFIRMED: 'checkmark-circle',
   DELIVERED: 'bicycle',
   CANCELLED: 'close-circle',

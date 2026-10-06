@@ -99,7 +99,7 @@ export function ProductListScreen() {
           contentContainerStyle={products.length === 0 ? styles.emptyList : styles.grid}
           ListEmptyComponent={
             <EmptyState
-              icon={isFiltered ? 'search-outline' : 'pricetags-outline'}
+              icon={isFiltered ? 'search-outline' : 'cube-outline'}
               title={isFiltered ? 'Aucun résultat' : 'Aucun produit'}
               message={isFiltered ? 'Essayez un autre mot ou une autre catégorie.' : 'Ajoutez votre premier produit pour commencer.'}
             />

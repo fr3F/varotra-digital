@@ -35,7 +35,7 @@ const MODULES: readonly ModuleTile[] = [
   { label: 'Dépenses', href: '/expenses', icon: 'wallet-outline' },
   { label: 'Ventes', href: '/sales', icon: 'cash-outline' },
   { label: 'Commandes', href: '/orders', icon: 'receipt-outline' },
-  { label: 'Produits', href: '/products', icon: 'pricetags-outline' },
+  { label: 'Produits', href: '/products', icon: 'cube-outline' },
 ];
 
 const PERIOD_OPTIONS: readonly ChipOption<Period>[] = PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }));
