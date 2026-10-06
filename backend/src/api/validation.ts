@@ -1,4 +1,5 @@
 import type { NotificationDetails } from '../domain/facebook-templates.ts';
+import { isExpoPushToken } from '../push/push-client.ts';
 import { type CatalogProduct, NOTIFICATION_EVENTS, type NotificationEvent, type UnavailableItem } from '../domain/types.ts';
 
 /** Erreur de saisie renvoyée en 400 à l'application. */
@@ -32,6 +33,18 @@ function count(value: unknown, field: string): number {
 export function parsePairRequest(body: unknown): { pairingCode: string; deviceName: string } {
   const value = record(body);
   return { pairingCode: text(value['pairingCode'], 'pairingCode', 100), deviceName: text(value['deviceName'], 'deviceName', 80) };
+}
+
+/** `{ pushToken: "ExponentPushToken[…]" }`, ou `{ pushToken: null }` pour désactiver les notifications. */
+export function parsePushTokenRequest(body: unknown): string | null {
+  const value = record(body)['pushToken'];
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== 'string' || !isExpoPushToken(value)) {
+    throw new BadRequestError('Champ « pushToken » : jeton Expo Push attendu.');
+  }
+  return value;
 }
 
 export function parseCatalog(body: unknown): CatalogProduct[] {

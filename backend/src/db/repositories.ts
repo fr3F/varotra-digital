@@ -299,7 +299,16 @@ export function createRepositories(db: SqlDb) {
         return id;
       },
       async revoke(id: string): Promise<void> {
-        await db.run('UPDATE devices SET revoked_at = ? WHERE id = ?', [now(), id]);
+        await db.run('UPDATE devices SET revoked_at = ?, push_token = NULL WHERE id = ?', [now(), id]);
+      },
+      /** Jeton Expo Push de l'appareil (null : ne plus envoyer de notification). */
+      async setPushToken(id: string, pushToken: string | null): Promise<void> {
+        await db.run('UPDATE devices SET push_token = ? WHERE id = ?', [pushToken, id]);
+      },
+      /** Appareils actifs qui acceptent les notifications push. */
+      async findPushTargets(): Promise<{ id: string; pushToken: string }[]> {
+        const rows = await db.all('SELECT id, push_token FROM devices WHERE revoked_at IS NULL AND push_token IS NOT NULL');
+        return rows.map((row) => ({ id: readString(row, 'id'), pushToken: readString(row, 'push_token') }));
       },
     },
 

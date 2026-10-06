@@ -12,6 +12,7 @@ export const messengerStore = createStore<MessengerState>({
   syncCount: 0,
   autoReply: true,
   notifyCustomer: true,
+  pushActive: false,
 });
 
 /**

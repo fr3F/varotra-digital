@@ -105,6 +105,11 @@ export function MessengerSettingsSection() {
                 ? 'Jamais synchronisé'
                 : `Dernière synchronisation : ${formatDisplayDateTime(state.lastSyncAt)}`}
           </Text>
+          <Text style={styles.muted}>
+            {state.pushActive
+              ? 'Notifications push actives : chaque commande Messenger est signalée, même application fermée.'
+              : 'Notifications push inactives (APK et notifications « Nouvelle commande » requis) : vérification toutes les 15 s, application ouverte.'}
+          </Text>
           {state.lastError !== null ? <Text style={styles.errorText}>Dernière erreur : {state.lastError}</Text> : null}
           {report !== null ? <Text style={styles.report}>{report}</Text> : null}
           <View style={styles.spacer} />

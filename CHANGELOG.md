@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 
 ## [Unreleased]
 
+### Ajouté
+- Notifications push « Nouvelle commande » envoyées par le serveur (Expo Push), même application fermée ; un appui importe et ouvre la commande. Nécessite l'APK (projet EAS + FCM).
+
 ## [0.1.0] - 2026-10-05
 
 Première version.

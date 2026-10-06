@@ -1,6 +1,8 @@
 import {
+  addNotificationReceivedListener,
   addNotificationResponseReceivedListener,
   AndroidImportance,
+  getExpoPushTokenAsync,
   getLastNotificationResponseAsync,
   getPermissionsAsync,
   NotificationPermissionsStatus,
@@ -86,5 +88,26 @@ export const expoNotificationCenter: NotificationCenter = {
       }
     });
     return () => subscription.remove();
+  },
+
+  onReceive(handler) {
+    const subscription = addNotificationReceivedListener((notification) => {
+      const target = parseNotificationTarget(notification.request.content.data);
+      if (target !== null) {
+        handler(target);
+      }
+    });
+    return () => subscription.remove();
+  },
+
+  async getPushToken(projectId) {
+    let permission = toPermission(await getPermissionsAsync());
+    if (permission === 'undetermined') {
+      permission = toPermission(await requestPermissionsAsync());
+    }
+    if (permission !== 'granted') {
+      return null;
+    }
+    return (await getExpoPushTokenAsync({ projectId })).data;
   },
 };

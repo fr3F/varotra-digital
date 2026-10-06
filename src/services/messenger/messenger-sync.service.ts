@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { toErrorMessage, ValidationError } from '@/core/errors/app-error';
 import { messengerReplyRepository } from '@/database/repositories/messenger-reply.repository';
 import { productRepository } from '@/database/repositories/product.repository';
@@ -5,7 +6,8 @@ import { settingsRepository } from '@/database/repositories/settings.repository'
 import { availableQuantity, MessengerState, SyncReport } from '@/models';
 import { nowIso } from '@/utils/date.utils';
 import { customerService } from '../customer.service';
-import { notificationService } from '../notifications/notification.service';
+import { notificationCenter } from '../notifications/notification-center';
+import { notificationPreferencesStore, notificationService } from '../notifications/notification.service';
 import { orderService } from '../order.service';
 import { productService } from '../product.service';
 import { MessengerApiError, messengerApi, normalizeBackendUrl } from './messenger-api';
@@ -20,9 +22,13 @@ const KEYS = {
   lastSyncAt: `${PREFIX}lastSyncAt`,
   autoReply: `${PREFIX}autoReply`,
   notifyCustomer: `${PREFIX}notifyCustomer`,
+  /** Dernier jeton push transmis au serveur ('' : aucun). */
+  pushToken: `${PREFIX}pushToken`,
 } as const;
 
 let running: Promise<SyncReport> | null = null;
+/** Jeton Expo Push de ce téléphone, obtenu une fois par lancement (undefined : pas encore demandé). */
+let devicePushToken: string | null | undefined;
 /** Une seule notification d'erreur par série d'échecs (pas une par tentative). */
 let errorNotified = false;
 
@@ -46,6 +52,34 @@ async function buildCatalog() {
     unitPrice: product.unitPrice,
     available: availableQuantity(product),
   }));
+}
+
+/** Identifiant du projet EAS (présent après `eas init`) : nécessaire pour obtenir un jeton push. */
+function easProjectId(): string | null {
+  const extra: unknown = Constants.expoConfig?.extra;
+  const eas: unknown = typeof extra === 'object' && extra !== null && 'eas' in extra ? extra.eas : null;
+  const fromExtra: unknown = typeof eas === 'object' && eas !== null && 'projectId' in eas ? eas.projectId : null;
+  const projectId = typeof fromExtra === 'string' ? fromExtra : Constants.easConfig?.projectId;
+  return typeof projectId === 'string' && projectId.length > 0 ? projectId : null;
+}
+
+/**
+ * Transmet au serveur le jeton push voulu (null si les notifications « Nouvelle commande » sont
+ * désactivées ou indisponibles), seulement quand il change. Un échec ne bloque pas la synchro.
+ */
+async function syncPushToken(baseUrl: string, token: string): Promise<void> {
+  if (devicePushToken === undefined) {
+    const projectId = easProjectId();
+    devicePushToken = projectId === null ? null : await notificationCenter.getPushToken(projectId).catch(() => null);
+  }
+  const wanted = notificationPreferencesStore.get().NEW_ORDER ? devicePushToken : null;
+  const stored = await settingsRepository.getAll(PREFIX);
+  if ((wanted ?? '') !== (stored.get(KEYS.pushToken) ?? '')) {
+    await messengerApi.setPushToken(baseUrl, token, wanted);
+    await settingsRepository.set(KEYS.pushToken, wanted ?? '');
+  }
+  notificationService.setRemotePushActive(wanted !== null);
+  update({ pushActive: wanted !== null });
 }
 
 /** Envoie les réponses Facebook en attente ; un échec réseau est retenté au cycle suivant. */
@@ -80,6 +114,9 @@ async function runSync(): Promise<SyncReport> {
   update({ syncing: true });
   try {
     await messengerApi.pushCatalog(target.baseUrl, target.token, await buildCatalog());
+    await syncPushToken(target.baseUrl, target.token).catch((error: unknown) =>
+      console.warn('[Carnet] Jeton push non transmis', error),
+    );
 
     const remoteOrders = await messengerApi.pendingOrders(target.baseUrl, target.token);
     const stored: string[] = [];
@@ -150,6 +187,8 @@ export const messengerSyncService = {
     const name = deviceName.trim().length > 0 ? deviceName.trim() : 'Téléphone';
     const token = await messengerApi.pair(baseUrl, pairingCode.trim(), name);
     await secureToken.set(token);
+    // Nouvel appareil côté serveur : le jeton push doit lui être transmis à nouveau.
+    await settingsRepository.set(KEYS.pushToken, '');
     await settingsRepository.set(KEYS.backendUrl, baseUrl);
     await settingsRepository.set(KEYS.deviceName, name);
     update({ connected: true, backendUrl: baseUrl, deviceName: name, lastError: null });
@@ -163,7 +202,9 @@ export const messengerSyncService = {
     }
     await secureToken.clear();
     await settingsRepository.set(KEYS.backendUrl, '');
-    update({ connected: false, backendUrl: null, lastError: null });
+    await settingsRepository.set(KEYS.pushToken, '');
+    notificationService.setRemotePushActive(false);
+    update({ connected: false, backendUrl: null, lastError: null, pushActive: false });
   },
 
   async setAutoReply(enabled: boolean): Promise<void> {

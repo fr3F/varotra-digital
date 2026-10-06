@@ -2,6 +2,7 @@ import type { Repositories } from '../db/repositories.ts';
 import { confirmationReply, handleMessage, PAYLOADS } from '../domain/conversation-engine.ts';
 import { isStatusInquiry, statusInquiryText } from '../domain/facebook-templates.ts';
 import { INITIAL_CONVERSATION } from '../domain/types.ts';
+import type { OrderPushService } from '../push/order-push.service.ts';
 import type { FacebookNotificationService } from './facebook-notification.service.ts';
 import type { MessengerClient } from './messenger-client.ts';
 import type { MessengerEvent } from './webhook-events.ts';
@@ -16,9 +17,10 @@ export function createMessengerService(deps: {
   readonly repos: Repositories;
   readonly client: MessengerClient;
   readonly notifications: FacebookNotificationService;
+  readonly orderPush: OrderPushService;
   readonly logger: Logger;
 }) {
-  const { repos, client, notifications, logger } = deps;
+  const { repos, client, notifications, orderPush, logger } = deps;
 
   return {
     /**
@@ -58,6 +60,8 @@ export function createMessengerService(deps: {
         if (result.order !== undefined) {
           const draft = await repos.drafts.create({ psid: event.psid, customerName, ...result.order });
           logger.info(`Commande Messenger ${draft.reference} créée (${draft.items.length} ligne(s), mode ${draft.mode}).`);
+          // Le vendeur d'abord : la notification part même si la réponse Messenger échoue ensuite.
+          await orderPush.notifyNewOrder(draft);
           await notifications.send(event.psid, confirmationReply(draft), { draftId: draft.id, kind: 'RECEIPT' });
         }
         await repos.inboundEvents.markProcessed(event.eventId, null);

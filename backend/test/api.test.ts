@@ -8,6 +8,7 @@ import type { QuickReply } from '../src/domain/types.ts';
 import type { MessengerClient } from '../src/messenger/messenger-client.ts';
 import { createTaskQueue } from '../src/messenger/messenger-service.ts';
 import { signPayload } from '../src/messenger/signature.ts';
+import type { PushClient, PushMessage, PushResult } from '../src/push/push-client.ts';
 
 interface InjectOptions {
   readonly method?: string;
@@ -71,16 +72,26 @@ function setup(now: () => Date = () => new Date()) {
       return 'Rasoa Be';
     },
   };
+  const pushed: PushMessage[] = [];
+  // Réponse simulée d'Expo Push, par jeton (ok par défaut).
+  const pushResults = new Map<string, PushResult>();
+  const pushClient: PushClient = {
+    async send(messages) {
+      pushed.push(...messages);
+      return messages.map((message) => pushResults.get(message.to) ?? 'ok');
+    },
+  };
   const queue = createTaskQueue();
   const hono = buildApp({
     config,
     repos: createRepositories(openNodeDatabase(':memory:')),
     messengerClient: client,
+    pushClient,
     defer: (_c, task) => queue.push(task),
     now,
   });
   const app = { inject: (options: InjectOptions) => inject(hono, options) };
-  return { app, queue, sent };
+  return { app, queue, sent, pushed, pushResults };
 }
 
 function webhook(psid: string, mid: string, message: Record<string, unknown>) {
@@ -270,6 +281,52 @@ describe('réponse automatique Facebook', () => {
     const { auth, id } = await orderFrom(ctx, 'c4', '1 huile');
     const result = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/notify`, headers: auth, payload: { event: 'PAID' } });
     assert.equal(result.statusCode, 400);
+  });
+});
+
+describe('notifications push (nouvelle commande)', () => {
+  const PUSH_TOKEN = 'ExponentPushToken[AbCdEf123456789]';
+
+  async function order(ctx: ReturnType<typeof setup>, psid: string): Promise<void> {
+    await postWebhook(ctx.app, webhook(psid, `${psid}-1`, { text: '2 huile tiko' }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2`, { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
+    await ctx.queue.idle();
+  }
+
+  it('prévient le téléphone relié dès qu’une commande arrive', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
+
+    await order(ctx, 'u1');
+    assert.equal(ctx.pushed.length, 0, 'aucun jeton enregistré : pas de push');
+
+    const saved = await ctx.app.inject({ method: 'PUT', url: '/v1/devices/push-token', headers: auth, payload: { pushToken: PUSH_TOKEN } });
+    assert.deepEqual(saved.json(), { ok: true, push: true });
+    await order(ctx, 'u2');
+
+    assert.equal(ctx.pushed.length, 1);
+    const push = ctx.pushed[0];
+    assert.equal(push?.to, PUSH_TOKEN);
+    assert.equal(push?.channelId, 'orders-new');
+    assert.match(push?.title ?? '', /^Nouvelle commande MSG-\d{8}-002 · Rasoa Be$/);
+    assert.match(push?.body ?? '', /^2 × Huile Tiko 1L · 19\D?000\sAr$/u);
+    assert.equal(push?.data['screen'], 'messenger-order');
+  });
+
+  it('refuse un jeton invalide et oublie un jeton désinscrit', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
+
+    const bad = await ctx.app.inject({ method: 'PUT', url: '/v1/devices/push-token', headers: auth, payload: { pushToken: 'n importe quoi' } });
+    assert.equal(bad.statusCode, 400);
+
+    await ctx.app.inject({ method: 'PUT', url: '/v1/devices/push-token', headers: auth, payload: { pushToken: PUSH_TOKEN } });
+    ctx.pushResults.set(PUSH_TOKEN, 'unregistered');
+    await order(ctx, 'u1');
+    await order(ctx, 'u2');
+    assert.equal(ctx.pushed.length, 1, 'jeton oublié après « DeviceNotRegistered »');
   });
 });
 

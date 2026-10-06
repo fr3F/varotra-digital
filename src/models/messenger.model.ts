@@ -93,6 +93,8 @@ export interface MessengerState {
   readonly autoReply: boolean;
   /** Envoyer au client un message quand sa commande change de statut. */
   readonly notifyCustomer: boolean;
+  /** Le serveur envoie une notification push à chaque nouvelle commande (APK uniquement). */
+  readonly pushActive: boolean;
 }
 
 export interface SyncReport {

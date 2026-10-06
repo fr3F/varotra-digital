@@ -22,6 +22,8 @@ export const notificationPreferencesStore = createStore<NotificationPreferences>
 
 /** Évite de redemander la permission à chaque notification si le vendeur l'a refusée. */
 let permissionAsked = false;
+/** Le serveur prévient déjà par push des commandes Messenger : pas de seconde notification à l'import. */
+let remotePushActive = false;
 
 async function deliver(notification: LocalNotification): Promise<boolean> {
   if (!notificationPreferencesStore.get()[notification.type]) {
@@ -85,8 +87,17 @@ export const notificationService = {
 
   onOpen: notificationCenter.onOpen,
 
+  onReceive: notificationCenter.onReceive,
+
+  setRemotePushActive(active: boolean): void {
+    remotePushActive = active;
+  },
+
   notifyNewOrder(order: Order, clientName: string | null): void {
     const fromMessenger = order.source === 'MESSENGER';
+    if (fromMessenger && remotePushActive) {
+      return;
+    }
     const check = !fromMessenger
       ? ''
       : order.needsReview
