@@ -56,12 +56,15 @@ export function parseCatalog(body: unknown): CatalogProduct[] {
   return products.map((item: unknown, index) => {
     const product = record(item);
     const sku = product['sku'];
+    const description = product['description'];
     return {
       id: text(product['id'], `products[${index}].id`, 100),
       name: text(product['name'], `products[${index}].name`),
       sku: sku === null || sku === undefined ? null : text(sku, `products[${index}].sku`, 100),
       unitPrice: count(product['unitPrice'], `products[${index}].unitPrice`),
       available: count(product['available'], `products[${index}].available`),
+      // Facultative (anciennes versions de l'application) ; tronquée pour rester lisible sur Messenger.
+      description: typeof description === 'string' && description.trim().length > 0 ? description.trim().slice(0, 300) : null,
     };
   });
 }

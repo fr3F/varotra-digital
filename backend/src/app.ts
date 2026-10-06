@@ -12,6 +12,7 @@ import {
 import type { AppConfig } from './config.ts';
 import type { Repositories } from './db/repositories.ts';
 import type { OrderDraft } from './domain/types.ts';
+import { createCartReminderService } from './messenger/cart-reminder.service.ts';
 import { createFacebookNotificationService } from './messenger/facebook-notification.service.ts';
 import type { MessengerClient } from './messenger/messenger-client.ts';
 import { createMessengerService } from './messenger/messenger-service.ts';
@@ -82,6 +83,22 @@ function clientIp(c: Context): string {
 
 /** Application HTTP (Node ou Cloudflare Workers). */
 export type CarnetApp = Hono<Env>;
+
+/** Tâches périodiques (cron Cloudflare toutes les 30 min, minuteur sur Node). */
+export function createScheduledJobs(deps: AppDeps) {
+  const logger: Logger = deps.logger ?? { info: () => undefined, error: (message) => console.error(message) };
+  const notifications = createFacebookNotificationService({ repos: deps.repos, client: deps.messengerClient, logger, now: deps.now });
+  const reminders = createCartReminderService({ repos: deps.repos, notifications, logger, now: deps.now });
+  return {
+    async run(): Promise<void> {
+      try {
+        await reminders.remindAbandonedCarts();
+      } catch (error: unknown) {
+        logger.error(`Relance des paniers impossible : ${error instanceof Error ? error.message : String(error)}`);
+      }
+    },
+  };
+}
 
 export function buildApp(deps: AppDeps): CarnetApp {
   const { config, repos } = deps;

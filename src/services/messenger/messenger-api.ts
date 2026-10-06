@@ -18,6 +18,8 @@ export interface CatalogEntry {
   readonly sku: string | null;
   readonly unitPrice: number;
   readonly available: number;
+  /** Argument de vente montré au client par le bot. */
+  readonly description: string | null;
 }
 
 const TIMEOUT_MS = 15_000;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
-import { buildApp, type CarnetApp } from '../src/app.ts';
+import { type AppDeps, buildApp, type CarnetApp, createScheduledJobs } from '../src/app.ts';
 import type { AppConfig } from '../src/config.ts';
 import { openNodeDatabase } from '../src/db/node-sqlite.ts';
 import { createRepositories } from '../src/db/repositories.ts';
@@ -82,16 +82,17 @@ function setup(now: () => Date = () => new Date()) {
     },
   };
   const queue = createTaskQueue();
-  const hono = buildApp({
+  const deps: AppDeps = {
     config,
     repos: createRepositories(openNodeDatabase(':memory:')),
     messengerClient: client,
     pushClient,
     defer: (_c, task) => queue.push(task),
     now,
-  });
+  };
+  const hono = buildApp(deps);
   const app = { inject: (options: InjectOptions) => inject(hono, options) };
-  return { app, queue, sent, pushed, pushResults };
+  return { app, queue, sent, pushed, pushResults, deps };
 }
 
 function webhook(psid: string, mid: string, message: Record<string, unknown>) {
@@ -298,6 +299,42 @@ describe('réponse automatique Facebook', () => {
     const { auth, id } = await orderFrom(ctx, 'c4', '1 huile');
     const result = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/notify`, headers: auth, payload: { event: 'PAID' } });
     assert.equal(result.statusCode, 400);
+  });
+});
+
+describe('relance des paniers abandonnés', () => {
+  it('relance une seule fois un panier non validé après 1 h, pas une commande validée', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
+    await postWebhook(ctx.app, webhook('r1', 'r1-1', { text: 'Salama, mila huile tiko roa' }));
+    await postWebhook(ctx.app, webhook('r2', 'r2-1', { text: '1 huile' }));
+    await postWebhook(ctx.app, webhook('r2', 'r2-2', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await ctx.queue.idle();
+    const before = ctx.sent.length;
+
+    const at = (hours: number) => createScheduledJobs({ ...ctx.deps, now: () => new Date(Date.now() + hours * 3600_000) });
+    await at(0.5).run();
+    assert.equal(ctx.sent.length, before, 'pas avant 1 h');
+
+    await at(2).run();
+    assert.equal(ctx.sent.length, before + 1, 'un seul client relancé (r1)');
+    assert.equal(ctx.sent.at(-1)?.psid, 'r1');
+    assert.match(ctx.sent.at(-1)?.text ?? '', /^Mbola miandry anao ny haronao 🛒/);
+
+    await at(3).run();
+    assert.equal(ctx.sent.length, before + 1, 'jamais deux relances pour le même panier');
+  });
+
+  it('met en avant (⭐) les produits les plus commandés', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
+    await postWebhook(ctx.app, webhook('p1', 'p1-1', { text: '2 savon' }));
+    await postWebhook(ctx.app, webhook('p1', 'p1-2', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('p2', 'p2-1', { text: 'menu' }));
+    await ctx.queue.idle();
+    assert.match(ctx.sent.at(-1)?.text ?? '', /• Savon Nosy — 1\D500\sAr ⭐ 🔥 plus que 2\n• Huile/);
   });
 });
 
