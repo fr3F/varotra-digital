@@ -43,14 +43,12 @@ export function ChipGroup<T>({ options, selected, onSelect, accessibilityLabel }
 const styles = StyleSheet.create({
   row: { gap: spacing.sm, paddingVertical: spacing.xs },
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.field,
   },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  label: { fontSize: fontSize.sm, color: colors.text },
+  chipActive: { backgroundColor: colors.primary },
+  label: { fontSize: fontSize.sm, fontWeight: '500', color: colors.textMuted },
   labelActive: { color: colors.onPrimary, fontWeight: '600' },
 });

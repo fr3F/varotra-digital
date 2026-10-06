@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 ## [Unreleased]
 
 ### Modifié
+- Nouvelle interface « Bite » : rouge bordeaux, en-têtes blancs, boutons et puces en pilule, cartes à ombre douce, barre d'onglets rouge (Accueil, Commandes avec pastille des nouvelles, Produits, Ventes, Réglages), produits en grille de cartes avec photo.
 - Commandes : l'application ne crée plus de commandes, elle en assure le suivi. Les commandes arrivent par Messenger ; on peut les corriger, les valider, les livrer ou les annuler. Boutons « + Nouvelle commande » retirés (liste, tableau de bord, fiche client).
 
 ### Ajouté

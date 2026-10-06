@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack } from 'expo-router';
 import { NEW_ENTITY_ID } from '@/core/constants/app.constants';
-import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
+import { colors, fontSize, radius, shadow, spacing } from '@/core/theme/theme';
 import { isLowStock, Product } from '@/models';
 import { AppButton } from '@/shared/components/AppButton';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
-import { ListRow } from '@/shared/components/ListRow';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { formatMoney } from '@/utils/money.utils';
 import { Thumbnail } from '@/shared/components/Thumbnail';
@@ -16,25 +16,36 @@ function openProduct(id: string): void {
   router.push({ pathname: '/products/[id]', params: { id } });
 }
 
-function ProductRow({ product }: { readonly product: Product }) {
+/** Carte produit (modèle « Bite ») : photo, nom, stock, prix en rouge. */
+function ProductCard({ product }: { readonly product: Product }) {
   const low = isLowStock(product);
   return (
-    <ListRow
-      title={product.name}
-      subtitle={[product.category, formatMoney(product.unitPrice)].filter(Boolean).join(' · ')}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${product.name}, ${formatMoney(product.unitPrice)}, stock ${product.stockQuantity}`}
       onPress={() => openProduct(product.id)}
-      leading={<Thumbnail name={product.name} imageUri={product.imageUri} />}
-      trailing={
-        <View
-          accessibilityLabel={`Stock : ${product.stockQuantity}`}
-          style={[styles.stockBadge, low && styles.stockBadgeLow]}
-        >
-          <Text style={[styles.stockText, low && styles.stockTextLow]}>{product.stockQuantity}</Text>
-        </View>
-      }
-    />
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
+      <View style={styles.photo}>
+        <Thumbnail name={product.name} imageUri={product.imageUri} size={CARD_IMAGE_SIZE} />
+      </View>
+      <Text style={styles.name} numberOfLines={2}>
+        {product.name}
+      </Text>
+      <Text style={[styles.stock, low && styles.stockLow]}>
+        {low ? '🔥 ' : ''}
+        {product.stockQuantity} en stock
+      </Text>
+      <View style={styles.cardFooter}>
+        <Text style={styles.price}>{formatMoney(product.unitPrice)}</Text>
+        <Ionicons name="create-outline" size={18} color={colors.primary} />
+      </View>
+    </Pressable>
   );
 }
+
+/** Côté de la photo dans une carte (deux cartes par ligne). */
+const CARD_IMAGE_SIZE = 140;
 
 export function ProductListScreen() {
   const [search, setSearch] = useState('');
@@ -86,11 +97,13 @@ export function ProductListScreen() {
         <FlatList
           data={products}
           keyExtractor={(product) => product.id}
-          renderItem={({ item }) => <ProductRow product={item} />}
+          renderItem={({ item }) => <ProductCard product={item} />}
+          numColumns={2}
+          columnWrapperStyle={styles.gridRow}
           refreshing={loading}
           onRefresh={() => void reload()}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={products.length === 0 ? styles.emptyList : undefined}
+          contentContainerStyle={products.length === 0 ? styles.emptyList : styles.grid}
           ListEmptyComponent={
             <EmptyState
               title={isFiltered ? 'Aucun résultat' : 'Aucun produit'}
@@ -112,10 +125,8 @@ const styles = StyleSheet.create({
   toolbar: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
   search: {
     minHeight: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    backgroundColor: colors.field,
     paddingHorizontal: spacing.md,
     fontSize: fontSize.md,
     color: colors.text,
@@ -124,21 +135,23 @@ const styles = StyleSheet.create({
   count: { color: colors.textMuted, fontSize: fontSize.sm },
   warning: { color: colors.warning, fontSize: fontSize.sm, fontWeight: '600' },
   emptyList: { flexGrow: 1 },
-  stockBadge: {
-    minWidth: 40,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-  },
-  stockBadgeLow: { backgroundColor: colors.warningLight },
-  stockText: { fontWeight: '700', color: colors.primaryDark, fontVariant: ['tabular-nums'] },
-  stockTextLow: { color: colors.warning },
-  footer: {
-    padding: spacing.lg,
+  grid: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.md },
+  gridRow: { gap: spacing.md },
+  card: {
+    ...shadow,
+    flex: 1,
+    maxWidth: '50%',
+    padding: spacing.sm,
+    borderRadius: radius.lg,
     backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    gap: 2,
   },
+  cardPressed: { opacity: 0.85 },
+  photo: { alignItems: 'center', marginBottom: spacing.xs, overflow: 'hidden', borderRadius: radius.lg },
+  name: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
+  stock: { fontSize: fontSize.sm, color: colors.textMuted },
+  stockLow: { color: colors.warning, fontWeight: '600' },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs },
+  price: { fontSize: fontSize.md, fontWeight: '800', color: colors.primary, fontVariant: ['tabular-nums'] },
+  footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
 });
