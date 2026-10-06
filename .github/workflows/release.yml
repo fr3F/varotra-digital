@@ -59,6 +59,8 @@ jobs:
           node-version: 24
           cache: npm
       - if: env.EXPO_TOKEN != ''
+        run: npm install -g npm@11.6.2  # même npm qu'en local : le lock file en dépend
+      - if: env.EXPO_TOKEN != ''
         run: npm ci
       - name: Build EAS (profil preview → APK)
         if: env.EXPO_TOKEN != ''

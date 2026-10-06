@@ -38,6 +38,7 @@ La CI GitHub relance ces vérifications ; une PR ne se fusionne que si elle est 
 - Écrans dans `src/app/` uniquement ; la logique dans `services/`, l'accès SQLite dans `database/repositories/`.
 - Nouvelle table ou colonne : **nouvelle migration** (`src/database/migrations/00X_*.ts` ou `backend/migrations/000X_*.sql`), ne jamais modifier une migration déjà publiée.
 - Paquets Expo : `npx expo install <paquet>` (versions compatibles SDK).
+- npm **11.6.2** (`npm install -g npm@11.6.2`) : une autre version réécrit `package-lock.json` différemment et casse `npm ci` dans la CI.
 
 ## Secrets
 
