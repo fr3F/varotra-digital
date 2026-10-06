@@ -8,7 +8,15 @@ import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
 import { commonMessages } from '@/core/i18n/common.messages';
 import { useMessages } from '@/core/i18n/i18n';
-import { availableQuantity, Period, PERIODS, REVENUE_GRANULARITIES, RevenueGranularity } from '@/models';
+import {
+  availableQuantity,
+  Period,
+  PERIODS,
+  REVENUE_BUCKET_COUNTS,
+  REVENUE_COUNT_OPTIONS,
+  REVENUE_GRANULARITIES,
+  RevenueGranularity,
+} from '@/models';
 import { dashboardService } from '@/services/dashboard.service';
 import { expensesVersion } from '@/services/expense.service';
 import { orderStore } from '@/services/order.service';
@@ -70,21 +78,43 @@ export function DashboardScreen() {
 
   // Graphique du chiffre d'affaires : découpage choisi (jours, semaines, mois, années).
   const [granularity, setGranularity] = useState<RevenueGranularity>('DAY');
-  const fetchSeries = useCallback(() => dashboardService.revenueSeries(granularity), [granularity]);
+  // Nombre de barres choisi pour chaque découpage (gardé quand on passe de l'un à l'autre).
+  const [counts, setCounts] = useState<Readonly<Record<RevenueGranularity, number>>>(REVENUE_BUCKET_COUNTS);
+  const count = counts[granularity];
+  const fetchSeries = useCallback(() => dashboardService.revenueSeries(granularity, count), [granularity, count]);
+  const countOptions = useMemo<readonly ChipOption<number>[]>(
+    () => REVENUE_COUNT_OPTIONS[granularity].map((value) => ({ value, label: String(value) })),
+    [granularity],
+  );
   const { data: series } = useQuery(fetchSeries, version);
   const granularityOptions = useMemo<readonly ChipOption<RevenueGranularity>[]>(
     () => REVENUE_GRANULARITIES.map((value) => ({ value, label: t.granularity[value] })),
     [t],
   );
   const chartData = useMemo(() => {
-    const label = (iso: string): string => {
+    const fullLabel = (iso: string): string => {
       const date = new Date(iso);
       const dayMonth = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
       switch (granularity) {
         case 'DAY':
-          return `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()}`;
+          return `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()} ${t.monthsShort[date.getMonth()] ?? ''}`;
         case 'WEEK':
           return t.weekStart(dayMonth);
+        case 'MONTH':
+          return `${t.monthsShort[date.getMonth()] ?? ''} ${date.getFullYear()}`;
+        case 'YEAR':
+          return String(date.getFullYear());
+      }
+    };
+    const label = (iso: string): string => {
+      const date = new Date(iso);
+      const dayMonth = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      switch (granularity) {
+        // Beaucoup de barres : étiquettes courtes (le détail complet s'affiche au-dessus du graphique).
+        case 'DAY':
+          return count > 7 ? String(date.getDate()) : `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()}`;
+        case 'WEEK':
+          return count > 8 ? dayMonth : t.weekStart(dayMonth);
         case 'MONTH':
           return t.monthsShort[date.getMonth()] ?? '';
         case 'YEAR':
@@ -94,10 +124,11 @@ export function DashboardScreen() {
     return (series ?? []).map((bucket) => ({
       key: bucket.day,
       label: label(bucket.day),
+      fullLabel: fullLabel(bucket.day),
       value: bucket.revenue,
       detail: t.dayDetail(formatMoney(bucket.profit), bucket.salesCount),
     }));
-  }, [series, granularity, t]);
+  }, [series, granularity, count, t]);
   const expenseData = useMemo(
     () =>
       (data?.expensesByCategory ?? []).map((entry) => ({
@@ -184,7 +215,7 @@ export function DashboardScreen() {
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>
-              {t.revenueChart} · {t.granularityRange[granularity]}
+              {t.revenueChart} · {t.granularityRange[granularity](count)}
             </Text>
             <ChipGroup
               accessibilityLabel={t.revenueChart}
@@ -192,8 +223,14 @@ export function DashboardScreen() {
               selected={granularity}
               onSelect={setGranularity}
             />
+            <ChipGroup
+              accessibilityLabel={t.countLabel}
+              options={countOptions}
+              selected={count}
+              onSelect={(value) => setCounts((previous) => ({ ...previous, [granularity]: value }))}
+            />
             {/* key : le graphique repart sur la barre la plus récente à chaque changement de découpage. */}
-            <ColumnChart key={granularity} data={chartData} formatValue={formatMoney} />
+            <ColumnChart key={`${granularity}-${count}`} data={chartData} formatValue={formatMoney} />
           </View>
 
           {expenseData.length > 0 ? (

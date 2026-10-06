@@ -7,7 +7,15 @@ import { Product } from './product.model';
 export const REVENUE_GRANULARITIES = ['DAY', 'WEEK', 'MONTH', 'YEAR'] as const;
 export type RevenueGranularity = (typeof REVENUE_GRANULARITIES)[number];
 
-/** Nombre de barres affichées pour chaque découpage. */
+/** Nombre de barres proposé pour chaque découpage (le vendeur choisit). */
+export const REVENUE_COUNT_OPTIONS: Readonly<Record<RevenueGranularity, readonly number[]>> = {
+  DAY: [7, 14, 30],
+  WEEK: [4, 8, 12],
+  MONTH: [3, 6, 12],
+  YEAR: [3, 5, 10],
+};
+
+/** Nombre de barres par défaut pour chaque découpage. */
 export const REVENUE_BUCKET_COUNTS: Readonly<Record<RevenueGranularity, number>> = {
   DAY: 7,
   WEEK: 8,

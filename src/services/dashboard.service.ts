@@ -1,3 +1,4 @@
+import { ValidationError } from '@/core/errors/app-error';
 import { dashboardRepository } from '@/database/repositories/dashboard.repository';
 import { expenseRepository } from '@/database/repositories/expense.repository';
 import { productRepository } from '@/database/repositories/product.repository';
@@ -77,10 +78,16 @@ export const dashboardService = {
 
   /**
    * Chiffre d'affaires et bénéfice par intervalle (le plus ancien d'abord), jusqu'à l'intervalle
-   * en cours inclus : 7 jours, 8 semaines, 12 mois ou 5 ans.
+   * en cours inclus : `count` jours, semaines, mois ou années (1 à 60).
    */
-  revenueSeries(granularity: RevenueGranularity, reference: Date = new Date()): Promise<DailyRevenue[]> {
-    const count = REVENUE_BUCKET_COUNTS[granularity];
+  revenueSeries(
+    granularity: RevenueGranularity,
+    count: number = REVENUE_BUCKET_COUNTS[granularity],
+    reference: Date = new Date(),
+  ): Promise<DailyRevenue[]> {
+    if (!Number.isSafeInteger(count) || count < 1 || count > 60) {
+      throw new ValidationError('Nombre de périodes invalide (1 à 60).');
+    }
     const starts = Array.from({ length: count }, (_, index) =>
       bucketStart(granularity, reference, index - (count - 1)).toISOString(),
     );
