@@ -44,6 +44,8 @@ const REORDER_PHRASES = [
   'toy ny teo', 'mitovy amin ny teo', 'ilay teo', 'averina', 'comme la derniere fois', 'comme avant', 'meme commande',
   'la meme chose', 'same as last time', 'same again', 'reorder', 'same order',
 ];
+/** Salutations : le bot accueille le client, même au milieu d'une conversation. */
+const GREETING_WORDS = new Set(['salama', 'manao', 'akory', 'bonjour', 'bonsoir', 'salut', 'hello', 'hi', 'hey', 'coucou']);
 const THANKS_WORDS = new Set(['misaotra', 'merci', 'thanks', 'thank', 'thx', 'mersi', 'tsara', 'super', 'cool']);
 
 function isReturningCustomer(ctx: EngineContext): boolean {
@@ -510,8 +512,13 @@ function handleText(text: string, current: ConversationState, ctx: EngineContext
     return cartSummary({ ...state, cart, rawTexts: [...state.rawTexts, text], unparsedText: null }, ctx, note);
   }
 
+  // Salutation avec un panier en cours : on accueille et on rappelle le panier (rien n'est perdu).
+  if (words.some((word) => GREETING_WORDS.has(word)) && cartItems(state.cart, ctx.catalog).length > 0) {
+    return cartSummary(state, ctx, `${welcome(state, ctx).split('\n')[0] ?? ''}\n${t(state).sales.cartWaiting}`);
+  }
   if (words.some((word) => MENU_WORDS.has(word)) || state.step.kind === 'IDLE') {
-    const intro = state.step.kind === 'IDLE' ? welcome(state, ctx) : undefined;
+    const greeted = state.step.kind === 'IDLE' || words.some((word) => GREETING_WORDS.has(word));
+    const intro = greeted ? welcome(state, ctx) : undefined;
     return productMenu({ ...state, unparsedText: state.step.kind === 'IDLE' ? text : null }, ctx, 0, intro);
   }
 

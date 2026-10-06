@@ -207,6 +207,18 @@ describe('bot intelligent', () => {
     assert.match(handleMessage(INITIAL_CONVERSATION, quick(PAYLOADS.reorder), nouveau).replies[0]?.text ?? '', /Vous n’avez pas encore commandé ici/);
   });
 
+  it('salutation avec un panier en cours : accueil et rappel du panier', () => {
+    const cart = handleMessage(INITIAL_CONVERSATION, { kind: 'TEXT', text: 'mila kiraro 2' }, fidele).state;
+    const reply = handleMessage(cart, { kind: 'TEXT', text: 'Salama' }, fidele).replies[0]?.text ?? '';
+    assert.match(reply, /^Faly mahita anao indray Rasoa 👋\nMbola miandry anao ny haronao 🛒/);
+    assert.match(reply, /2 × Kiraro/);
+  });
+
+  it('quantité avec une faute de frappe (« rla » → 2)', () => {
+    const asked = handleMessage(INITIAL_CONVERSATION, quick(PAYLOADS.product('kiraro')), nouveau).state;
+    assert.match(handleMessage(asked, { kind: 'TEXT', text: 'Rla' }, nouveau).replies[0]?.text ?? '', /2 × Kiraro/);
+  });
+
   it('remerciements : réponse polie', () => {
     assert.match(say('Misaotra betsaka').replies[0]?.text ?? '', /^Misaotra anao koa 🙏/);
     assert.match(say('Merci !').replies[0]?.text ?? '', /^Merci à vous 🙏/);

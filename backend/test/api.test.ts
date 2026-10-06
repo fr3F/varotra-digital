@@ -200,7 +200,8 @@ describe('webhook Meta', () => {
     await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
     const body = JSON.stringify({
       object: 'page',
-      entry: [{ messaging: [{ sender: { id: 'u2' }, timestamp: clock.getTime(), message: { mid: 'x1', text: 'Valider', quick_reply: { payload: 'PRODUCT:p-huile' } } }] }],
+      // Même horloge que les messages suivants (sinon la conversation serait vue comme oubliée).
+      entry: [{ messaging: [{ sender: { id: 'u2' }, timestamp: Date.now(), message: { mid: 'x1', text: 'Valider', quick_reply: { payload: 'PRODUCT:p-huile' } } }] }],
     });
     await postWebhook(ctx.app, body);
     await postWebhook(ctx.app, webhook('u2', 'x2', { text: '1', quick_reply: { payload: 'QTY:1' } }));

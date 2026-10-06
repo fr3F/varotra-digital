@@ -80,9 +80,34 @@ export function replaceNumberWords(words: readonly string[]): string[] {
   return result;
 }
 
-/** Message composé uniquement d'une quantité (« 3 », « roa », « twelve », « roa ambin'ny folo »), sinon null. */
+/** Nombre écrit avec une faute de frappe (« rla » → roa, « deus » → deux), sinon le mot tel quel. */
+function correctNumberWord(word: string): string {
+  if (word.length < 3 || /\d/.test(word) || simpleValue(word) !== null) {
+    return word;
+  }
+  const candidates = [...Object.keys(UNITS), ...Object.keys(TENS)].filter(
+    (candidate) => candidate.length >= 3 && Math.abs(candidate.length - word.length) <= 1 && differsByOneEdit(word, candidate),
+  );
+  return candidates.length === 1 ? (candidates[0] ?? word) : word;
+}
+
+/** Vrai si une seule insertion, suppression ou substitution sépare les deux mots. */
+function differsByOneEdit(a: string, b: string): boolean {
+  if (a.length === b.length) {
+    return [...a].filter((char, index) => char !== b[index]).length === 1;
+  }
+  const [shorter, longer] = a.length < b.length ? [a, b] : [b, a];
+  for (let index = 0; index < longer.length; index += 1) {
+    if (longer.slice(0, index) + longer.slice(index + 1) === shorter) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Message composé uniquement d'une quantité (« 3 », « roa », « rla », « twelve », « roa ambin'ny folo »), sinon null. */
 export function quantityOnly(words: readonly string[]): number | null {
-  const replaced = replaceNumberWords(words.filter((word) => word.length > 0));
+  const replaced = replaceNumberWords(words.filter((word) => word.length > 0).map(correctNumberWord));
   if (replaced.length !== 1) {
     return null;
   }
