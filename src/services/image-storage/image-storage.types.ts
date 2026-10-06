@@ -10,4 +10,6 @@ export interface ImageStorage {
   persist(sourceUri: string): Promise<string>;
   /** Supprime une image gérée par l'application. Sans effet sur une URI externe ou absente. */
   remove(uri: string): Promise<void>;
+  /** Supprime toutes les images gérées par l'application (remise à zéro des données). */
+  removeAll(): Promise<void>;
 }
