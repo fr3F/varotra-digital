@@ -14,6 +14,7 @@ import {
   Product,
 } from '@/models';
 import { formatMoney } from '@/utils/money.utils';
+import { inboxService } from './inbox.service';
 import { notificationCenter } from './notification-center';
 import { notificationsMessages } from './notifications.messages';
 
@@ -44,12 +45,16 @@ async function deliver(notification: LocalNotification): Promise<boolean> {
 }
 
 /**
- * Programme l'envoi après la validation de la transaction en cours :
- * une opération annulée ne notifie jamais.
+ * Programme l'envoi après la validation de la transaction en cours : une opération annulée
+ * ne notifie jamais. L'événement est toujours gardé dans le centre de notifications ;
+ * `systemNotification: false` : pas de notification système (déjà prévenu par push).
  */
-function queue(notification: LocalNotification): void {
+function queue(notification: LocalNotification, options: { readonly systemNotification?: boolean } = {}): void {
   database.afterCommit(() => {
-    deliver(notification).catch((error: unknown) => console.warn('[Carnet] Notification non envoyée', error));
+    inboxService.record(notification).catch((error: unknown) => console.warn('[Carnet] Notification non gardée', error));
+    if (options.systemNotification !== false) {
+      deliver(notification).catch((error: unknown) => console.warn('[Carnet] Notification non envoyée', error));
+    }
   });
 }
 
@@ -70,6 +75,7 @@ export const notificationService = {
       { ...DEFAULT_NOTIFICATION_PREFERENCES },
     );
     notificationPreferencesStore.set(preferences);
+    await inboxService.load();
     await notificationCenter.setup();
   },
 
@@ -97,9 +103,6 @@ export const notificationService = {
 
   notifyNewOrder(order: Order, clientName: string | null): void {
     const fromMessenger = order.source === 'MESSENGER';
-    if (fromMessenger && remotePushActive) {
-      return;
-    }
     const t = messagesOf(notificationsMessages);
     const check = !fromMessenger
       ? ''
@@ -115,7 +118,7 @@ export const notificationService = {
       title: fromMessenger ? t.newMessengerOrder : t.newOrder,
       body: `${orderTitle(order, clientName)} — ${formatMoney(order.totalAmount)}${check}`,
       target: { screen: 'order', id: order.id },
-    });
+    }, { systemNotification: !(fromMessenger && remotePushActive) });
   },
 
   notifyOrderCompleted(order: Order, clientName: string | null): void {
@@ -163,6 +166,9 @@ export const notificationService = {
 
   /** Notification d'essai (écran Réglages) : ignore la préférence pour vérifier l'affichage. */
   async sendTest(type: NotificationType): Promise<boolean> {
+    const t = messagesOf(notificationsMessages);
+    // Visible aussi dans le centre de notifications (cloche), même sans autorisation système.
+    await inboxService.record({ type, title: t.testTitle, body: t.testBody, target: { screen: 'dashboard' } });
     let permission = await notificationCenter.getPermission();
     if (permission !== 'granted') {
       permission = await notificationService.requestPermission();

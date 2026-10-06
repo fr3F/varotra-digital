@@ -1,6 +1,7 @@
 import { database } from '@/database/database';
 import { customerService } from './customer.service';
 import { imageStorage } from './image-storage/image-storage';
+import { inboxService } from './notifications/inbox.service';
 import { orderService } from './order.service';
 import { productService } from './product.service';
 import { stockService } from './stock.service';
@@ -10,6 +11,7 @@ import { stockService } from './stock.service';
  * Réglages et liaison Messenger (app_settings, jeton sécurisé) sont conservés.
  */
 const TABLES_IN_DELETE_ORDER = [
+  'app_notifications',
   'messenger_replies',
   'order_status_history',
   'order_items',
@@ -61,6 +63,12 @@ export const resetService = {
       }
     });
     await imageStorage.removeAll().catch((error: unknown) => console.warn('[Carnet] Photos non supprimées', error));
-    await Promise.all([productService.load(), orderService.load(), customerService.load(), stockService.refresh()]);
+    await Promise.all([
+      productService.load(),
+      orderService.load(),
+      customerService.load(),
+      stockService.refresh(),
+      inboxService.load(),
+    ]);
   },
 };

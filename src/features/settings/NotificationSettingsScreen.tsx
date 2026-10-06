@@ -87,6 +87,7 @@ export function NotificationSettingsScreen() {
               value={preferences[type]}
               onValueChange={(enabled) => void toggle(type, enabled)}
               trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={colors.surface}
             />
           </View>
         ))}
