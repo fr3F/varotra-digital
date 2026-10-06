@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 
 ## [Unreleased]
 
+### Modifié
+- Bot Messenger : le stock est vérifié avant validation. Au-delà du stock, le bouton « Valider » est remplacé par « Ajuster au stock » (produits épuisés retirés) ; aucune commande n'est créée au-delà du stock.
+
 ## [0.1.0] - 2026-10-05
 
 Première version.
