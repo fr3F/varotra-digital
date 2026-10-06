@@ -152,7 +152,13 @@ export function DashboardScreen() {
               basis={basis}
               label={t.lowStock}
               value={String(data.lowStockCount)}
-              caption={t.lowStockCaption}
+              caption={
+                data.productCount === 0
+                  ? t.noProductCaption
+                  : data.outOfStockCount > 0
+                    ? `${t.lowStockCaption}, ${t.lowStockCaptionOut(data.outOfStockCount)}`
+                    : t.lowStockCaption
+              }
               tone={data.lowStockCount > 0 ? 'warning' : 'default'}
             />
           </View>
@@ -176,8 +182,11 @@ export function DashboardScreen() {
                 {t.seeStock}
               </Text>
             </View>
-            {data.lowStockProducts.length === 0 ? (
-              <Text style={styles.muted}>{t.allAboveThreshold}</Text>
+            {/* Message exact : aucun produit n'est pas la même chose que « stock suffisant ». */}
+            {data.productCount === 0 ? (
+              <Text style={styles.muted}>{t.noProducts}</Text>
+            ) : data.lowStockProducts.length === 0 ? (
+              <Text style={styles.muted}>{t.allAboveThreshold(data.productCount)}</Text>
             ) : (
               data.lowStockProducts.map((product) => {
                 const available = availableQuantity(product);

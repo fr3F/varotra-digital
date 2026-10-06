@@ -28,6 +28,10 @@ export interface DashboardData {
   readonly openOrders: number;
   readonly lowStockProducts: readonly Product[];
   readonly lowStockCount: number;
+  /** Nombre de produits du catalogue (0 : rien à surveiller, le message « tout va bien » serait faux). */
+  readonly productCount: number;
+  /** Produits en rupture (disponible = 0), comptés parmi lowStockCount. */
+  readonly outOfStockCount: number;
   /** Les 7 derniers jours, du plus ancien au plus récent. */
   readonly last7Days: readonly DailyRevenue[];
   readonly expensesByCategory: readonly CategoryTotal[];

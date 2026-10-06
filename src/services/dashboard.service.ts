@@ -49,6 +49,8 @@ export const dashboardService = {
       openOrders,
       lowStockProducts: lowStock.slice(0, LOW_STOCK_PREVIEW),
       lowStockCount: lowStock.length,
+      productCount: products.length,
+      outOfStockCount: lowStock.filter((product) => availableQuantity(product) === 0).length,
       last7Days,
       expensesByCategory,
     };
