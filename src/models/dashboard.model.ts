@@ -3,8 +3,28 @@ import { CategoryTotal } from './expense.model';
 import { Period } from './period.model';
 import { Product } from './product.model';
 
+/** Découpage du graphique du chiffre d'affaires : jours, semaines, mois ou années. */
+export const REVENUE_GRANULARITIES = ['DAY', 'WEEK', 'MONTH', 'YEAR'] as const;
+export type RevenueGranularity = (typeof REVENUE_GRANULARITIES)[number];
+
+/** Nombre de barres que le vendeur peut saisir pour chaque découpage. */
+export const REVENUE_COUNT_LIMITS: Readonly<Record<RevenueGranularity, { readonly min: number; readonly max: number }>> = {
+  DAY: { min: 1, max: 90 },
+  WEEK: { min: 1, max: 52 },
+  MONTH: { min: 1, max: 24 },
+  YEAR: { min: 1, max: 10 },
+};
+
+/** Nombre de barres par défaut pour chaque découpage. */
+export const REVENUE_BUCKET_COUNTS: Readonly<Record<RevenueGranularity, number>> = {
+  DAY: 7,
+  WEEK: 8,
+  MONTH: 12,
+  YEAR: 5,
+};
+
 export interface DailyRevenue {
-  /** Début du jour local, en ISO. */
+  /** Début de l'intervalle local (jour, semaine, mois ou année), en ISO. */
   readonly day: IsoDateString;
   readonly revenue: Money;
   readonly profit: Money;
@@ -32,7 +52,5 @@ export interface DashboardData {
   readonly productCount: number;
   /** Produits en rupture (disponible = 0), comptés parmi lowStockCount. */
   readonly outOfStockCount: number;
-  /** Les 7 derniers jours, du plus ancien au plus récent. */
-  readonly last7Days: readonly DailyRevenue[];
   readonly expensesByCategory: readonly CategoryTotal[];
 }

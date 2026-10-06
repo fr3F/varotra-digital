@@ -8,7 +8,16 @@ import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
 import { commonMessages } from '@/core/i18n/common.messages';
 import { useMessages } from '@/core/i18n/i18n';
-import { availableQuantity, Period, PERIODS } from '@/models';
+import {
+  availableQuantity,
+  Period,
+  periodStart,
+  PERIODS,
+  REVENUE_BUCKET_COUNTS,
+  REVENUE_COUNT_LIMITS,
+  REVENUE_GRANULARITIES,
+  RevenueGranularity,
+} from '@/models';
 import { dashboardService } from '@/services/dashboard.service';
 import { expensesVersion } from '@/services/expense.service';
 import { orderStore } from '@/services/order.service';
@@ -17,11 +26,11 @@ import { stockMovementVersion } from '@/services/stock-movement.service';
 import { AppButton } from '@/shared/components/AppButton';
 import { BarList } from '@/shared/components/charts/BarList';
 import { ColumnChart } from '@/shared/components/charts/ColumnChart';
-import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
+import { NumberStepper } from '@/shared/components/NumberStepper';
+import { SegmentedControl, SegmentOption } from '@/shared/components/SegmentedControl';
 import { StatCard } from '@/shared/components/StatCard';
 import { ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { useQuery } from '@/shared/hooks/useQuery';
-import { formatShortDay } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
 import { dashboardMessages } from './dashboard.messages';
 
@@ -50,11 +59,24 @@ export function DashboardScreen() {
   const t = useMessages(dashboardMessages);
   const common = useMessages(commonMessages);
   const [period, setPeriod] = useState<Period>('TODAY');
-  const periodOptions = useMemo<readonly ChipOption<Period>[]>(
+  const periodOptions = useMemo<readonly SegmentOption<Period>[]>(
     () => PERIODS.map((value) => ({ value, label: common.period[value] })),
     [common],
   );
   const { width } = useWindowDimensions();
+  // Dates lisibles dans la langue choisie : « mar. 6 oct. », « 30/09 ».
+  const today = new Date();
+  const longDay = (date: Date) =>
+    `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()} ${t.monthsShort[date.getMonth()] ?? ''}`;
+  const shortDay = (date: Date) =>
+    `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const start = periodStart(period, today);
+  const periodRange =
+    start === null
+      ? t.allTime
+      : period === 'TODAY'
+        ? longDay(today)
+        : `${shortDay(new Date(start))} – ${shortDay(today)}`;
   const basis = width >= WIDE_LAYOUT ? '22%' : '45%';
 
   // Toute écriture (vente, dépense, stock, commande) rafraîchit les indicateurs.
@@ -69,16 +91,57 @@ export function DashboardScreen() {
     }, [reload]),
   );
 
-  const chartData = useMemo(
-    () =>
-      (data?.last7Days ?? []).map((day) => ({
-        key: day.day,
-        label: formatShortDay(day.day),
-        value: day.revenue,
-        detail: t.dayDetail(formatMoney(day.profit), day.salesCount),
-      })),
-    [data, t],
+  // Graphique du chiffre d'affaires : découpage choisi (jours, semaines, mois, années).
+  const [granularity, setGranularity] = useState<RevenueGranularity>('DAY');
+  // Nombre de barres choisi pour chaque découpage (gardé quand on passe de l'un à l'autre).
+  const [counts, setCounts] = useState<Readonly<Record<RevenueGranularity, number>>>(REVENUE_BUCKET_COUNTS);
+  const count = counts[granularity];
+  const fetchSeries = useCallback(() => dashboardService.revenueSeries(granularity, count), [granularity, count]);
+  const { data: series } = useQuery(fetchSeries, version);
+  const limits = REVENUE_COUNT_LIMITS[granularity];
+  const granularityOptions = useMemo<readonly SegmentOption<RevenueGranularity>[]>(
+    () => REVENUE_GRANULARITIES.map((value) => ({ value, label: t.granularity[value] })),
+    [t],
   );
+  const chartData = useMemo(() => {
+    const fullLabel = (iso: string): string => {
+      const date = new Date(iso);
+      const dayMonth = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      switch (granularity) {
+        case 'DAY':
+          return `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()} ${t.monthsShort[date.getMonth()] ?? ''}`;
+        case 'WEEK':
+          return t.weekStart(dayMonth);
+        case 'MONTH':
+          return `${t.monthsShort[date.getMonth()] ?? ''} ${date.getFullYear()}`;
+        case 'YEAR':
+          return String(date.getFullYear());
+      }
+    };
+    const label = (iso: string): string => {
+      const date = new Date(iso);
+      const dayMonth = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      switch (granularity) {
+        // Beaucoup de barres : étiquettes courtes (le détail complet s'affiche au-dessus du graphique).
+        case 'DAY':
+          return count > 7 ? String(date.getDate()) : `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()}`;
+        case 'WEEK':
+          // Axe : date courte du lundi ; « sem. 05/10 » complet au-dessus du graphique.
+          return dayMonth;
+        case 'MONTH':
+          return t.monthsShort[date.getMonth()] ?? '';
+        case 'YEAR':
+          return String(date.getFullYear());
+      }
+    };
+    return (series ?? []).map((bucket) => ({
+      key: bucket.day,
+      label: label(bucket.day),
+      fullLabel: fullLabel(bucket.day),
+      value: bucket.revenue,
+      detail: t.dayDetail(formatMoney(bucket.profit), bucket.salesCount),
+    }));
+  }, [series, granularity, count, t]);
   const expenseData = useMemo(
     () =>
       (data?.expensesByCategory ?? []).map((entry) => ({
@@ -103,7 +166,13 @@ export function DashboardScreen() {
       ) : (
         <>
           <View style={styles.hero}>
-            <Text style={styles.heroLabel}>{t.revenueToday}</Text>
+            <View style={styles.heroTop}>
+              <Text style={styles.heroLabel}>{t.revenueToday}</Text>
+              <View style={styles.heroDate}>
+                <Ionicons name="calendar-outline" size={14} color={colors.onPrimary} />
+                <Text style={styles.heroDateText}>{longDay(today)}</Text>
+              </View>
+            </View>
             <Text style={styles.heroValue}>{formatMoney(data.revenueToday)}</Text>
             <Text style={styles.heroCaption}>{t.salesToday(data.salesTodayCount)}</Text>
             <View style={styles.heroActions}>
@@ -117,7 +186,12 @@ export function DashboardScreen() {
             </View>
           </View>
 
-          <ChipGroup accessibilityLabel={t.period} options={periodOptions} selected={period} onSelect={setPeriod} />
+          {/* Indicateurs de la période choisie : titre + dates exactes, puis choix de la période. */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeading}>{t.indicators}</Text>
+            <Text style={styles.sectionRange}>{periodRange}</Text>
+          </View>
+          <SegmentedControl accessibilityLabel={t.period} options={periodOptions} selected={period} onSelect={setPeriod} />
 
           <View style={styles.grid}>
             <StatCard
@@ -164,8 +238,33 @@ export function DashboardScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t.revenueChart}</Text>
-            <ColumnChart data={chartData} formatValue={formatMoney} />
+            <Text style={styles.cardTitle}>
+              {t.revenueChart} · {t.granularityRange[granularity](count)}
+            </Text>
+            {/* Filtre : découpage (segments), puis nombre de périodes (champ libre avec − / +). */}
+            <View style={styles.filter}>
+              <SegmentedControl
+                accessibilityLabel={t.revenueChart}
+                options={granularityOptions}
+                selected={granularity}
+                onSelect={setGranularity}
+              />
+              <View style={styles.countRow}>
+                <Text style={styles.countText}>{t.show}</Text>
+                <NumberStepper
+                  value={count}
+                  min={limits.min}
+                  max={limits.max}
+                  onChange={(value) => setCounts((previous) => ({ ...previous, [granularity]: value }))}
+                  accessibilityLabel={`${t.countLabel} (${t.range(limits.min, limits.max)})`}
+                  decrementLabel={t.fewer}
+                  incrementLabel={t.more}
+                />
+                <Text style={styles.countText}>{t.units[granularity]}</Text>
+              </View>
+            </View>
+            {/* key : le graphique repart sur la barre la plus récente à chaque changement de découpage. */}
+            <ColumnChart key={`${granularity}-${count}`} data={chartData} formatValue={formatMoney} />
           </View>
 
           {expenseData.length > 0 ? (
@@ -232,11 +331,28 @@ export function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
+  filter: { gap: spacing.md, marginTop: spacing.sm, marginBottom: spacing.md },
+  countRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  countText: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
   contentWide: { maxWidth: 1100, width: '100%', alignSelf: 'center' },
   hero: { padding: spacing.xl, borderRadius: radius.lg, backgroundColor: colors.primary },
-  heroLabel: { color: colors.primaryLight, fontSize: fontSize.md },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  heroLabel: { flexShrink: 1, color: colors.primaryLight, fontSize: fontSize.md, fontWeight: '600' },
+  heroDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  heroDateText: { color: colors.onPrimary, fontSize: fontSize.sm, fontWeight: '700' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm },
+  sectionHeading: { fontSize: fontSize.lg, fontWeight: '800', color: colors.text },
+  sectionRange: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textMuted },
   heroValue: { color: colors.onPrimary, fontSize: 34, fontWeight: '800', fontVariant: ['tabular-nums'] },
   heroCaption: { color: colors.primaryLight, fontSize: fontSize.sm },
   heroActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
