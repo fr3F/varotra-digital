@@ -59,7 +59,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen name="products" options={{ title: 'Produits', tabBarIcon: icon('pricetags-outline', 'pricetags') }} />
       <Tabs.Screen name="sales" options={{ title: 'Ventes', tabBarIcon: icon('cash-outline', 'cash') }} />
-      <Tabs.Screen name="settings" options={{ title: 'Réglages', tabBarIcon: icon('person-outline', 'person') }} />
+      <Tabs.Screen name="settings" options={{ title: 'Réglages', tabBarIcon: icon('settings-outline', 'settings') }} />
     </Tabs>
   );
 }
