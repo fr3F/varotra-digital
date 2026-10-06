@@ -1,12 +1,13 @@
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
-import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
+import { colors, fontSize, spacing } from '@/core/theme/theme';
 import { ClientSummary } from '@/models';
 import { customerService } from '@/services/customer.service';
 import { AppButton } from '@/shared/components/AppButton';
 import { ListRow } from '@/shared/components/ListRow';
 import { Thumbnail } from '@/shared/components/Thumbnail';
+import { SearchField } from '@/shared/components/SearchField';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { formatMoney } from '@/utils/money.utils';
 import { useClients } from './useClients';
@@ -45,15 +46,7 @@ export function ClientListScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'Clients' }} />
       <View style={styles.toolbar}>
-        <TextInput
-          accessibilityLabel="Rechercher un client"
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Rechercher (nom, téléphone, adresse)"
-          placeholderTextColor={colors.textMuted}
-          style={styles.search}
-          autoCorrect={false}
-        />
+        <SearchField accessibilityLabel="Rechercher un client" value={search} onChangeText={setSearch} placeholder="Rechercher (nom, téléphone, adresse)" />
         <Text style={styles.count}>
           {isFiltered ? `${summaries.length} sur ${totalCount} client(s)` : `${totalCount} client(s)`}
         </Text>
@@ -90,16 +83,6 @@ export function ClientListScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   toolbar: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
-  search: {
-    minHeight: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
   count: { color: colors.textMuted, fontSize: fontSize.sm },
   emptyList: { flexGrow: 1 },
   trailing: { alignItems: 'flex-end' },

@@ -67,7 +67,7 @@ export function ProductImagePicker({ productName, imageUri, onChange, disabled =
     <View style={styles.container}>
       <Text style={styles.label}>Image</Text>
       <View style={styles.row}>
-        <Thumbnail name={productName || '?'} imageUri={hasImage ? imageUri : null} size={96} />
+        <Thumbnail name={productName} imageUri={hasImage ? imageUri : null} size={96} />
         <View style={styles.actions}>
           <AppButton
             label={hasImage ? "Changer l'image" : 'Choisir une image'}

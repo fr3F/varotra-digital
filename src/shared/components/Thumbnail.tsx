@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { colors, radius } from '@/core/theme/theme';
 
@@ -31,7 +32,11 @@ export function Thumbnail({ name, imageUri, size = 48 }: ThumbnailProps) {
 
   return (
     <View style={[styles.placeholder, dimension]}>
-      <Text style={[styles.initials, { fontSize: size * 0.36 }]}>{initials || '?'}</Text>
+      {initials.length > 0 ? (
+        <Text style={[styles.initials, { fontSize: size * 0.36 }]}>{initials}</Text>
+      ) : (
+        <Ionicons name="image-outline" size={size * 0.42} color={colors.primary} />
+      )}
     </View>
   );
 }

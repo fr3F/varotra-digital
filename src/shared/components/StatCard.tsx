@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
+import { colors, fontSize, radius, shadow, spacing } from '@/core/theme/theme';
 
 type StatTone = 'default' | 'positive' | 'negative' | 'warning';
 
@@ -37,10 +37,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...shadow,
   },
-  label: { fontSize: fontSize.sm, color: colors.textMuted },
+  label: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textMuted },
   value: { marginTop: spacing.xs, fontSize: fontSize.xl, fontWeight: '700', fontVariant: ['tabular-nums'] },
   caption: { marginTop: spacing.xs, fontSize: fontSize.sm, color: colors.textMuted },
 });
