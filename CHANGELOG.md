@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 ## [Unreleased]
 
 ### Ajouté
+- Centre de notifications : cloche 🔔 dans l'en-tête de chaque écran avec pastille des non lues ; historique des événements (nouvelles commandes, livraisons, stock bas ou en rupture, erreurs de synchronisation), un appui ouvre la commande ou le produit ; « Tout marquer comme lu », « Tout effacer ».
 - Accueil : graphique du chiffre d'affaires filtrable — découpage Jours / Semaines / Mois / Années et nombre de périodes saisi librement (champ avec − / +, jusqu'à 90 jours, 52 semaines, 24 mois, 10 ans).
 - Application en malgache, français et anglais : bouton langue (drapeaux 🇲🇬 🇫🇷 🇬🇧) en haut de chaque écran et Réglages › Langue ; langue du téléphone par défaut, choix enregistré.
 

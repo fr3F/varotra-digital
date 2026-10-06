@@ -34,6 +34,18 @@ export type NotificationTarget =
   | { readonly screen: 'messenger-order'; readonly id: string }
   | { readonly screen: 'dashboard' };
 
+/** Notification gardée dans le centre de notifications (cloche de l'en-tête). */
+export interface InboxNotification {
+  readonly id: string;
+  readonly type: NotificationType;
+  readonly title: string;
+  readonly body: string;
+  /** Écran à ouvrir, ou null si la cible n'est plus lisible. */
+  readonly target: NotificationTarget | null;
+  readonly createdAt: string;
+  readonly readAt: string | null;
+}
+
 /** Contenu d'une notification locale. */
 export interface LocalNotification {
   readonly type: NotificationType;

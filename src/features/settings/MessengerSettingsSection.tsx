@@ -37,6 +37,7 @@ function ToggleRow({
         value={value}
         onValueChange={onChange}
         trackColor={{ true: colors.primary, false: colors.border }}
+        thumbColor={colors.surface}
       />
     </View>
   );

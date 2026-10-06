@@ -5,6 +5,7 @@ import { ordersWorkflow } from './004-orders-workflow';
 import { salesExpensesSettings } from './005-sales-expenses-settings';
 import { messenger } from './006-messenger';
 import { messengerReplies } from './007-messenger-replies';
+import { notificationInbox } from './008-notification-inbox';
 import { Migration } from './migration.types';
 
 /** Ajouter chaque nouvelle migration à la fin, sans jamais modifier une migration déjà livrée. */
@@ -16,4 +17,5 @@ export const MIGRATIONS: readonly Migration[] = [
   salesExpensesSettings,
   messenger,
   messengerReplies,
+  notificationInbox,
 ];

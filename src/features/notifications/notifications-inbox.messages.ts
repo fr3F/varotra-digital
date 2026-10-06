@@ -1,0 +1,52 @@
+import { defineMessages } from '@/core/i18n/i18n';
+
+/** Textes du centre de notifications (cloche de l'en-tête). */
+export const inboxMessages = defineMessages(
+  {
+    title: 'Notifications',
+    open: (unread: number) => (unread > 0 ? `Notifications, ${unread} non lue(s)` : 'Notifications'),
+    markAllRead: 'Tout marquer comme lu',
+    clear: 'Tout effacer',
+    clearConfirmTitle: 'Effacer les notifications ?',
+    clearConfirmMessage: 'L’historique des notifications sera vidé.',
+    emptyTitle: 'Aucune notification',
+    emptyMessage: 'Les nouvelles commandes, les livraisons et les alertes de stock apparaîtront ici.',
+    unreadCount: (unread: number) => `${unread} non lue(s)`,
+    justNow: 'à l’instant',
+    minutesAgo: (n: number) => `il y a ${n} min`,
+    hoursAgo: (n: number) => `il y a ${n} h`,
+    yesterday: 'hier',
+  },
+  {
+    mg: {
+      title: 'Fampandrenesana',
+      open: (unread: number) => (unread > 0 ? `Fampandrenesana, ${unread} tsy mbola novakiana` : 'Fampandrenesana'),
+      markAllRead: 'Marihina ho voavaky daholo',
+      clear: 'Fafana daholo',
+      clearConfirmTitle: 'Hofafana ny fampandrenesana ?',
+      clearConfirmMessage: 'Ho foana ny tantaran’ny fampandrenesana.',
+      emptyTitle: 'Tsy misy fampandrenesana',
+      emptyMessage: 'Hiseho eto ny kaomandy vaovao, ny entana tonga ary ny tahiry efa ho lany.',
+      unreadCount: (unread: number) => `${unread} tsy mbola novakiana`,
+      justNow: 'izao vao izao',
+      minutesAgo: (n: number) => `${n} minitra lasa`,
+      hoursAgo: (n: number) => `${n} ora lasa`,
+      yesterday: 'omaly',
+    },
+    en: {
+      title: 'Notifications',
+      open: (unread: number) => (unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'),
+      markAllRead: 'Mark all as read',
+      clear: 'Clear all',
+      clearConfirmTitle: 'Clear notifications?',
+      clearConfirmMessage: 'The notification history will be emptied.',
+      emptyTitle: 'No notifications',
+      emptyMessage: 'New orders, deliveries and stock alerts will appear here.',
+      unreadCount: (unread: number) => `${unread} unread`,
+      justNow: 'just now',
+      minutesAgo: (n: number) => `${n} min ago`,
+      hoursAgo: (n: number) => `${n} h ago`,
+      yesterday: 'yesterday',
+    },
+  },
+);
