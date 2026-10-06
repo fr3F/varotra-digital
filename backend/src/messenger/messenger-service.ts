@@ -1,6 +1,7 @@
 import type { Repositories } from '../db/repositories.ts';
 import { confirmationReply, handleMessage, PAYLOADS } from '../domain/conversation-engine.ts';
 import { isStatusInquiry, statusInquiryText } from '../domain/facebook-templates.ts';
+import { detectLanguage, MESSAGES } from '../domain/i18n.ts';
 import { INITIAL_CONVERSATION } from '../domain/types.ts';
 import type { OrderPushService } from '../push/order-push.service.ts';
 import type { FacebookNotificationService } from './facebook-notification.service.ts';
@@ -41,10 +42,14 @@ export function createMessengerService(deps: {
         // « Statut ? », « ma commande » : où en est la dernière commande (hors panier en cours).
         const latest = await repos.drafts.findLatestByPsid(event.psid);
         if (event.message.kind === 'TEXT' && latest !== null && state.cart.length === 0 && isStatusInquiry(event.message.text)) {
-          await repos.conversations.save({ psid: event.psid, customerName, state, lastCustomerMessageAt });
+          const lang = detectLanguage(event.message.text) ?? state.lang;
+          await repos.conversations.save({ psid: event.psid, customerName, state: { ...state, lang }, lastCustomerMessageAt });
           await notifications.send(
             event.psid,
-            { text: statusInquiryText(latest), quickReplies: [{ title: '🛒 Nouvelle commande', payload: PAYLOADS.menu }] },
+            {
+              text: statusInquiryText(latest, lang),
+              quickReplies: [{ title: MESSAGES[lang].buttons.newOrder, payload: PAYLOADS.menu }],
+            },
             { draftId: latest.id, kind: 'STATUS_REPLY' },
           );
           await repos.inboundEvents.markProcessed(event.eventId, null);
@@ -62,7 +67,7 @@ export function createMessengerService(deps: {
           logger.info(`Commande Messenger ${draft.reference} créée (${draft.items.length} ligne(s), mode ${draft.mode}).`);
           // Le vendeur d'abord : la notification part même si la réponse Messenger échoue ensuite.
           await orderPush.notifyNewOrder(draft);
-          await notifications.send(event.psid, confirmationReply(draft), { draftId: draft.id, kind: 'RECEIPT' });
+          await notifications.send(event.psid, confirmationReply(draft, result.state.lang), { draftId: draft.id, kind: 'RECEIPT' });
         }
         await repos.inboundEvents.markProcessed(event.eventId, null);
       } catch (error: unknown) {

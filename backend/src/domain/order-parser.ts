@@ -1,4 +1,5 @@
 import { normalizeText } from '../shared/format.ts';
+import { replaceNumberWords } from './numbers.ts';
 import type { CatalogProduct } from './types.ts';
 
 export interface ParsedLine {
@@ -14,29 +15,34 @@ export interface ParseResult {
   readonly unmatched: readonly string[];
 }
 
-/** Nombres écrits en lettres, en français et en malgache. */
-const NUMBER_WORDS: Readonly<Record<string, number>> = {
-  un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10,
-  iray: 1, roa: 2, telo: 3, efatra: 4, dimy: 5, enina: 6, fito: 7, valo: 8, sivy: 9, folo: 10,
-};
-
-/** Mots sans valeur pour reconnaître un produit (formules de politesse, verbes de commande…). */
+/** Mots sans valeur pour reconnaître un produit (politesse, verbes de commande…), en français, malgache et anglais. */
 const STOP_WORDS = new Set([
+  // Français
   'je', 'j', 'veux', 'voudrais', 'aimerais', 'commande', 'commander', 'acheter', 'prendre', 'svp', 'stp', 'merci',
-  'bonjour', 'salut', 'de', 'des', 'du', 'la', 'le', 'les', 'l', 'd', 'avec', 'pour', 'moi', 's', 'il', 'vous', 'plait',
-  'x', 'fois', 'piece', 'pieces', 'pcs', 'pc', 'unite', 'unites',
+  'bonjour', 'bonsoir', 'salut', 'de', 'des', 'du', 'la', 'le', 'les', 'l', 'd', 'avec', 'pour', 'moi', 's', 'il',
+  'vous', 'plait', 'x', 'fois', 'piece', 'pieces', 'pcs', 'pc', 'unite', 'unites', 'besoin', 'ai', 'faut', 'me',
+  'donnez', 'envoyez', 'aussi', 'encore',
+  // Malgache
   'mila', 'aho', 'te', 'hividy', 'mba', 'azafady', 'misaotra', 'ny', 'ilay', 'manafatra', 'tompoko', 've', 'kely',
+  'omeo', 'alefaso', 'ahy', 'hoe', 'izaho', 'ilaiko', 'tiako', 'ho', 'an', 're', 'ry', 'dia', 'koa', 'salama',
+  'manao', 'ahoana', 'vidiana', 'hafa', 'raha', 'sombiny',
+  // Anglais
+  'i', 'want', 'need', 'would', 'like', 'please', 'pls', 'buy', 'order', 'some', 'give', 'get', 'can', 'have',
+  'the', 'a', 'of', 'hello', 'hi', 'thanks', 'thank', 'you', 'also', 'more', 'units',
 ]);
 
-/** Séparateurs entre deux articles : virgule, point-virgule, retour à la ligne, « + », « et », « sy ». */
-const SEGMENT_SEPARATOR = /\s*(?:[,;\n+]|\bet\b|\bsy\b|\band\b)\s*/i;
+/** Séparateurs entre deux articles : virgule, point-virgule, retour à la ligne, « + », « & », « et », « sy », « ary », « and ». */
+const SEGMENT_SEPARATOR = /\s*(?:[,;\n+&]|\bet\b|\bsy\b|\bary\b|\band\b)\s*/i;
 
 const MAX_QUANTITY = 999;
 
+/** Mots normalisés, nombres en lettres convertis en chiffres (« roa ambin'ny folo » → « 12 »). */
 function tokensOf(text: string): string[] {
-  return normalizeText(text)
-    .split(' ')
-    .filter((token) => token.length > 0);
+  return replaceNumberWords(
+    normalizeText(text)
+      .split(' ')
+      .filter((token) => token.length > 0),
+  );
 }
 
 /** Deux mots correspondent s'ils sont égaux, ou si l'un commence l'autre (« huil » / « huile »). */
@@ -48,13 +54,10 @@ function tokensMatch(a: string, b: string): boolean {
   return shorter.length >= 4 && longer.startsWith(shorter);
 }
 
-/** Lit « 2 », « x2 », « 2x », « deux », « roa ». */
+/** Lit « 2 », « x2 », « 2x » (les nombres en lettres sont déjà convertis par tokensOf). */
 function quantityOf(token: string): number | null {
   const digits = /^x?(\d{1,3})x?$/.exec(token);
-  if (digits?.[1] !== undefined) {
-    return Number(digits[1]);
-  }
-  return NUMBER_WORDS[token] ?? null;
+  return digits?.[1] === undefined ? null : Number(digits[1]);
 }
 
 interface ProductTokens {

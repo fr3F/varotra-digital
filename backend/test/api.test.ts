@@ -278,7 +278,19 @@ describe('réponse automatique Facebook', () => {
     await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/notify`, headers: auth, payload: { event: 'CONFIRMED' } });
     await postWebhook(ctx.app, webhook('c3', 'c3-3', { text: 'Aiza ny kaomandiko ?' }));
     await ctx.queue.idle();
+    // Question en malgache : réponse en malgache.
+    assert.match(ctx.sent.at(-1)?.text ?? '', /^Ny kaomandinao MSG-\d{8}-001 \(9 500 Ar\) : voamafy ✅\.$/);
+
+    await postWebhook(ctx.app, webhook('c3', 'c3-4', { text: 'Où en est ma commande ?' }));
+    await ctx.queue.idle();
     assert.match(ctx.sent.at(-1)?.text ?? '', /^Votre commande MSG-\d{8}-001 \(9 500 Ar\) est confirmée ✅\.$/);
+  });
+
+  it('prévient le client dans sa langue (malgache)', async () => {
+    const ctx = setup();
+    const { auth, id } = await orderFrom(ctx, 'c5', 'Mila huile tiko 1 azafady');
+    const result = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/notify`, headers: auth, payload: { event: 'CONFIRMED' } });
+    assert.match(result.json<{ text: string }>().text, /^Voamafy ny kaomandinao\.\nLaharana MSG-\d{8}-001 — Totaly : 9 500 Ar$/);
   });
 
   it('refuse un événement inconnu', async () => {
