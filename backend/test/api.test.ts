@@ -147,19 +147,23 @@ describe('webhook Meta', () => {
     assert.equal((await postWebhook(ctx.app, webhook('u1', 'm1', { text: '2 huile tiko et 3 savon' }))).statusCode, 200);
     // Renvoi du même webhook par Meta : ignoré.
     await postWebhook(ctx.app, webhook('u1', 'm1', { text: '2 huile tiko et 3 savon' }));
-    await postWebhook(ctx.app, webhook('u1', 'm2', { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
+    // 3 savons demandés pour 2 en stock : pas de « Valider », le client ajuste son panier.
+    await postWebhook(ctx.app, webhook('u1', 'm2', { text: 'Ajuster', quick_reply: { payload: 'ADJUST' } }));
+    await postWebhook(ctx.app, webhook('u1', 'm3', { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
     await ctx.queue.idle();
 
-    assert.equal(ctx.sent.length, 2, 'panier puis confirmation');
-    assert.match(ctx.sent[0]?.text ?? '', /⚠️ stock : 2/);
-    assert.match(ctx.sent[1]?.text ?? '', /Commande reçue ✅ \(réf\. MSG-\d{8}-001\)/);
+    assert.equal(ctx.sent.length, 3, 'panier, panier ajusté, confirmation');
+    assert.match(ctx.sent[0]?.text ?? '', /⚠️ seulement 2 en stock/);
+    assert.ok(!ctx.sent[0]?.quickReplies?.some((reply) => reply.payload === 'CHECKOUT'));
+    assert.match(ctx.sent[1]?.text ?? '', /2 × Savon Nosy/);
+    assert.match(ctx.sent[2]?.text ?? '', /Commande reçue ✅ \(réf\. MSG-\d{8}-001\)/);
 
     const pending = await ctx.app.inject({ url: '/v1/orders/pending', headers: auth });
     const { orders } = pending.json<{ orders: { id: string; needsReview: boolean; customer: { name: string }; items: unknown[] }[] }>();
     assert.equal(orders.length, 1);
     assert.equal(orders[0]?.customer.name, 'Rasoa Be');
     assert.equal(orders[0]?.items.length, 2);
-    assert.equal(orders[0]?.needsReview, true, '3 savons demandés pour 2 disponibles');
+    assert.equal(orders[0]?.needsReview, false, 'panier ajusté au stock');
 
     const id = orders[0]?.id ?? '';
     const ack = await ctx.app.inject({ method: 'POST', url: '/v1/orders/ack', headers: auth, payload: { ids: [id] } });
@@ -236,7 +240,8 @@ describe('réponse automatique Facebook', () => {
 
   it('stock insuffisant : « Produit indisponible actuellement. » avec le détail', async () => {
     const ctx = setup();
-    const { auth, id } = await orderFrom(ctx, 'c2', '5 savon');
+    // Stock vendu entre-temps en boutique : l'application répond « indisponible ».
+    const { auth, id } = await orderFrom(ctx, 'c2', '2 savon');
     const result = await ctx.app.inject({
       method: 'POST',
       url: `/v1/orders/${id}/notify`,
