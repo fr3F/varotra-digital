@@ -5,6 +5,7 @@ import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { commonMessages } from '@/core/i18n/common.messages';
 import { useMessages } from '@/core/i18n/i18n';
+import { LanguageMenu } from '@/core/i18n/LanguageMenu';
 import { useStore } from '@/core/state/store';
 import { colors, fontSize, radius, shadow, spacing } from '@/core/theme/theme';
 import { orderStore } from '@/services/order.service';
@@ -33,6 +34,8 @@ export default function TabsLayout() {
         headerTitleAlign: 'left',
         headerTitleStyle: { fontSize: fontSize.xl, fontWeight: '800', color: colors.text },
         headerTintColor: colors.primary,
+        // Choix de la langue (🇲🇬 / 🇫🇷 / 🇬🇧) depuis tous les écrans principaux.
+        headerRight: () => <LanguageMenu />,
         sceneStyle: { backgroundColor: colors.background },
         tabBarShowLabel: false,
         tabBarActiveTintColor: colors.onPrimary,

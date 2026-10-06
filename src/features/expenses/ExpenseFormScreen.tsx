@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { toErrorMessage } from '@/core/errors/app-error';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, spacing } from '@/core/theme/theme';
-import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS, ExpenseCategory } from '@/models';
+import { EXPENSE_CATEGORIES, ExpenseCategory } from '@/models';
 import { expenseService } from '@/services/expense.service';
 import { AppButton } from '@/shared/components/AppButton';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
@@ -15,20 +17,24 @@ import { confirmAction } from '@/shared/utils/confirm';
 import { goBackOr } from '@/shared/utils/navigation';
 import { formatDisplayDate, localDayIso } from '@/utils/date.utils';
 import { emptyExpenseForm, expenseToFormValues, parseExpenseForm } from './expense-form';
-
-const CATEGORY_OPTIONS: readonly ChipOption<ExpenseCategory>[] = EXPENSE_CATEGORIES.map((value) => ({
-  value,
-  label: EXPENSE_CATEGORY_LABELS[value],
-}));
-
-const QUICK_DATES: readonly ChipOption<number>[] = [
-  { value: 0, label: 'Aujourd’hui' },
-  { value: 1, label: 'Hier' },
-  { value: 2, label: 'Avant-hier' },
-];
+import { expensesMessages } from './expenses.messages';
 
 /** Correction ou suppression d'une dépense existante (pas de création dans l'application). */
 export function ExpenseFormScreen({ expenseId }: { readonly expenseId: string }) {
+  const t = useMessages(expensesMessages);
+  const common = useMessages(commonMessages);
+  const categoryOptions = useMemo<readonly ChipOption<ExpenseCategory>[]>(
+    () => EXPENSE_CATEGORIES.map((value) => ({ value, label: common.expenseCategory[value] })),
+    [common],
+  );
+  const quickDates = useMemo<readonly ChipOption<number>[]>(
+    () => [
+      { value: 0, label: t.today },
+      { value: 1, label: t.yesterday },
+      { value: 2, label: t.dayBefore },
+    ],
+    [t],
+  );
   const [category, setCategory] = useState<ExpenseCategory>('PURCHASE');
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -64,7 +70,7 @@ export function ExpenseFormScreen({ expenseId }: { readonly expenseId: string })
     });
 
   const remove = async () => {
-    if (!(await confirmAction('Supprimer', 'Supprimer cette dépense ?', 'Supprimer'))) {
+    if (!(await confirmAction(t.deleteTitle, t.deleteMessage, common.actions.delete))) {
       return;
     }
     await run(async () => {
@@ -78,49 +84,49 @@ export function ExpenseFormScreen({ expenseId }: { readonly expenseId: string })
   }
 
   // Raccourci de date sélectionné si la date saisie correspond à l'un d'eux.
-  const quickDate = QUICK_DATES.find((option) => formatDisplayDate(localDayIso(option.value)) === values.date);
+  const quickDate = quickDates.find((option) => formatDisplayDate(localDayIso(option.value)) === values.date);
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior="height">
-      <Stack.Screen options={{ title: 'Modifier la dépense' }} />
+      <Stack.Screen options={{ title: t.editTitle }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <ErrorBanner message={error} />
-        <Text style={styles.label}>Catégorie</Text>
-        <ChipGroup accessibilityLabel="Catégorie" options={CATEGORY_OPTIONS} selected={category} onSelect={setCategory} />
+        <Text style={styles.label}>{t.category}</Text>
+        <ChipGroup accessibilityLabel={t.category} options={categoryOptions} selected={category} onSelect={setCategory} />
         <View style={styles.spacer} />
         <FormField
-          label="Libellé"
+          label={t.label}
           required
           value={values.label}
           onChangeText={(v) => setField('label', v)}
-          placeholder="Ex. Réassort savon, taxi-moto, boost Facebook…"
+          placeholder={t.labelPlaceholder}
         />
         <FormField
-          label="Montant (Ar)"
+          label={t.amount}
           required
           keyboardType="number-pad"
           value={values.amount}
           onChangeText={(v) => setField('amount', v)}
         />
         <FormField
-          label="Date"
+          label={t.date}
           required
           value={values.date}
           onChangeText={(v) => setField('date', v)}
-          placeholder="JJ/MM/AAAA"
+          placeholder={t.datePlaceholder}
           keyboardType="numbers-and-punctuation"
         />
         <ChipGroup
-          accessibilityLabel="Date rapide"
-          options={QUICK_DATES}
+          accessibilityLabel={t.quickDate}
+          options={quickDates}
           selected={quickDate?.value ?? -1}
           onSelect={(daysAgo) => setField('date', formatDisplayDate(localDayIso(daysAgo)))}
         />
         <View style={styles.spacer} />
-        <FormField label="Notes" multiline value={values.notes} onChangeText={(v) => setField('notes', v)} />
+        <FormField label={t.notes} multiline value={values.notes} onChangeText={(v) => setField('notes', v)} />
         <View style={styles.actions}>
-          <AppButton label="Enregistrer" onPress={() => void save()} loading={busy} />
-          <AppButton label="Supprimer" variant="danger" onPress={() => void remove()} disabled={busy} />
+          <AppButton label={common.actions.save} onPress={() => void save()} loading={busy} />
+          <AppButton label={common.actions.delete} variant="danger" onPress={() => void remove()} disabled={busy} />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

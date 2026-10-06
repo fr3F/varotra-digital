@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 
 ## [Unreleased]
 
+### Ajouté
+- Application en malgache, français et anglais : bouton langue (drapeaux 🇲🇬 🇫🇷 🇬🇧) en haut de chaque écran et Réglages › Langue ; langue du téléphone par défaut, choix enregistré.
+
 ### Modifié
 - Application de suivi : plus de création de ventes, de clients ni de dépenses (en plus des commandes). Les ventes viennent des commandes livrées, les clients de Messenger ; fiches client et dépenses existantes restent modifiables. « + Vente » de l'accueil devient « Ventes ».
 - Interface plus claire : texte plus grand (corps 16) et mieux contrasté, fond blanc, listes en cartes avec flèche, champs de formulaire gris clair avec bordure rouge à la saisie, recherche avec loupe et bouton effacer, statuts de commande avec icône, écrans vides illustrés, accès rapides à icônes sur l'accueil.

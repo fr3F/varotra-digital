@@ -16,6 +16,9 @@ import { goBackOr } from '@/shared/utils/navigation';
 import { EMPTY_PRODUCT_FORM, parseProductForm, productToFormValues } from './product-form';
 import { ProductImagePicker } from './ProductImagePicker';
 import { ProductStockCard } from './ProductStockCard';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
+import { productsMessages } from './products.messages';
 
 interface ProductFormScreenProps {
   /** null = création d'un nouveau produit. */
@@ -23,6 +26,8 @@ interface ProductFormScreenProps {
 }
 
 export function ProductFormScreen({ productId }: ProductFormScreenProps) {
+  const t = useMessages(productsMessages);
+  const common = useMessages(commonMessages);
   const isNew = productId === null;
   const [product, setProduct] = useState<Product | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -64,7 +69,7 @@ export function ProductFormScreen({ productId }: ProductFormScreenProps) {
     });
 
   const remove = async () => {
-    if (productId === null || !(await confirmAction('Supprimer', 'Supprimer ce produit ?', 'Supprimer'))) {
+    if (productId === null || !(await confirmAction(common.actions.delete, t.deleteConfirm, common.actions.delete))) {
       return;
     }
     await run(async () => {
@@ -79,14 +84,14 @@ export function ProductFormScreen({ productId }: ProductFormScreenProps) {
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior="height">
-      <Stack.Screen options={{ title: isNew ? 'Nouveau produit' : 'Modifier le produit' }} />
+      <Stack.Screen options={{ title: isNew ? t.newTitle : t.editTitle }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <ErrorBanner message={error} />
         {product !== null ? (
           <Text style={styles.meta}>
-            Créé le {formatDisplayDate(product.createdAt)}
+            {t.createdOn(formatDisplayDate(product.createdAt))}
             {formatDisplayDate(product.updatedAt) !== formatDisplayDate(product.createdAt)
-              ? ` · modifié le ${formatDisplayDate(product.updatedAt)}`
+              ? t.updatedOn(formatDisplayDate(product.updatedAt))
               : ''}
           </Text>
         ) : null}
@@ -96,47 +101,47 @@ export function ProductFormScreen({ productId }: ProductFormScreenProps) {
           onChange={(uri) => setField('imageUri', uri)}
           disabled={busy}
         />
-        <FormField label="Nom" required value={values.name} onChangeText={(v) => setField('name', v)} />
-        <FormField label="Référence (SKU)" value={values.sku} onChangeText={(v) => setField('sku', v)} />
-        <FormField label="Catégorie" value={values.category} onChangeText={(v) => setField('category', v)} />
+        <FormField label={t.name} required value={values.name} onChangeText={(v) => setField('name', v)} />
+        <FormField label={t.sku} value={values.sku} onChangeText={(v) => setField('sku', v)} />
+        <FormField label={t.category} value={values.category} onChangeText={(v) => setField('category', v)} />
         <FormField
-          label="Prix de vente (Ar)"
+          label={t.unitPrice}
           required
           keyboardType="number-pad"
           value={values.unitPrice}
           onChangeText={(v) => setField('unitPrice', v)}
         />
         <FormField
-          label="Prix d'achat (Ar)"
+          label={t.costPrice}
           keyboardType="number-pad"
           value={values.costPrice}
           onChangeText={(v) => setField('costPrice', v)}
         />
         <FormField
-          label="Seuil d'alerte stock"
+          label={t.alertThreshold}
           keyboardType="number-pad"
           value={values.alertThreshold}
           onChangeText={(v) => setField('alertThreshold', v)}
-          hint="Le produit est signalé lorsque son stock atteint ce seuil."
+          hint={t.alertThresholdHint}
         />
         {isNew ? (
           <FormField
-            label="Stock initial"
+            label={t.initialStock}
             keyboardType="number-pad"
             value={values.initialStock}
             onChangeText={(v) => setField('initialStock', v)}
           />
         ) : null}
         <FormField
-          label="Description"
+          label={t.description}
           multiline
           value={values.description}
           onChangeText={(v) => setField('description', v)}
         />
 
         <View style={styles.actions}>
-          <AppButton label="Enregistrer" onPress={() => void save()} loading={busy} />
-          {!isNew ? <AppButton label="Supprimer" variant="danger" onPress={() => void remove()} disabled={busy} /> : null}
+          <AppButton label={common.actions.save} onPress={() => void save()} loading={busy} />
+          {!isNew ? <AppButton label={common.actions.delete} variant="danger" onPress={() => void remove()} disabled={busy} /> : null}
         </View>
 
         {product !== null ? <ProductStockCard productId={product.id} /> : null}

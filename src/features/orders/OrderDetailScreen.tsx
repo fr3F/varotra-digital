@@ -2,11 +2,12 @@ import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { toErrorMessage } from '@/core/errors/app-error';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import {
   isOrderDeletable,
   isOrderEditable,
-  ORDER_STATUS_LABELS,
   ORDER_TRANSITIONS,
   OrderDetail,
   OrderStatus,
@@ -20,8 +21,8 @@ import { confirmAction } from '@/shared/utils/confirm';
 import { goBackOr } from '@/shared/utils/navigation';
 import { formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
-import { ORDER_ACTION_CONFIRMATIONS, ORDER_ACTION_LABELS } from './order-labels';
 import { MessengerOrderCard } from './MessengerOrderCard';
+import { ordersMessages } from './orders.messages';
 import { OrderStatusBadge } from './OrderStatusBadge';
 
 /** Variante visuelle de chaque action de statut. */
@@ -40,6 +41,8 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const { busy, error, run } = useAsyncAction();
+  const t = useMessages(ordersMessages);
+  const { orderStatus, actions, noClient } = useMessages(commonMessages);
 
   const refresh = useCallback(async () => {
     try {
@@ -58,8 +61,8 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   );
 
   const changeStatus = async (target: OrderStatus) => {
-    const confirmation = ORDER_ACTION_CONFIRMATIONS[target];
-    if (confirmation !== undefined && !(await confirmAction(ORDER_ACTION_LABELS[target], confirmation))) {
+    const confirmation = t.actionConfirmations[target];
+    if (confirmation !== undefined && !(await confirmAction(t.actionLabels[target], confirmation, actions.confirm))) {
       return;
     }
     await run(async () => {
@@ -69,10 +72,8 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   };
 
   const remove = async () => {
-    const message = detail?.order.stockReserved
-      ? 'La commande sera supprimée et son stock réservé libéré.'
-      : 'Supprimer définitivement cette commande ?';
-    if (!(await confirmAction('Supprimer la commande', message, 'Supprimer'))) {
+    const message = detail?.order.stockReserved ? t.deleteReserved : t.deleteForever;
+    if (!(await confirmAction(t.deleteTitle, message, actions.delete))) {
       return;
     }
     await run(async () => {
@@ -97,8 +98,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
     lines.some(({ item }) => !shortages.some((shortage) => shortage.productId === item.productId));
 
   const adjust = async () => {
-    const message = 'Les quantités seront ramenées au stock disponible (produits épuisés retirés de la commande).';
-    if (!(await confirmAction('Ajuster au stock disponible', message, 'Ajuster'))) {
+    if (!(await confirmAction(t.adjustTitle, t.adjustMessage, t.adjustConfirm))) {
       return;
     }
     await run(async () => {
@@ -117,11 +117,11 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
           <Text style={styles.reference}>{order.reference}</Text>
           <OrderStatusBadge status={order.status} />
         </View>
-        <Text style={styles.meta}>Commandée le {formatDisplayDateTime(order.orderedAt)}</Text>
-        {order.stockReserved ? <Text style={styles.reserved}>Stock réservé pour cette commande</Text> : null}
+        <Text style={styles.meta}>{t.orderedOn(formatDisplayDateTime(order.orderedAt))}</Text>
+        {order.stockReserved ? <Text style={styles.reserved}>{t.stockReserved}</Text> : null}
         <View style={styles.separator} />
-        <Text style={styles.sectionLabel}>Client</Text>
-        <Text style={styles.value}>{client?.name ?? 'Client non renseigné'}</Text>
+        <Text style={styles.sectionLabel}>{t.client}</Text>
+        <Text style={styles.value}>{client?.name ?? noClient}</Text>
         {client?.phone ? <Text style={styles.meta}>{client.phone}</Text> : null}
         {client?.address ? <Text style={styles.meta}>{client.address}</Text> : null}
         {client !== null ? (
@@ -130,12 +130,12 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
             onPress={() => router.push({ pathname: '/clients/[id]', params: { id: client.id } })}
             style={styles.link}
           >
-            Voir la fiche client
+            {t.viewClient}
           </Text>
         ) : null}
         {order.notes ? (
           <>
-            <Text style={[styles.sectionLabel, styles.spaced]}>Notes</Text>
+            <Text style={[styles.sectionLabel, styles.spaced]}>{t.notes}</Text>
             <Text style={styles.value}>{order.notes}</Text>
           </>
         ) : null}
@@ -144,7 +144,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
       <MessengerOrderCard order={order} />
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Produits</Text>
+        <Text style={styles.sectionTitle}>{t.products}</Text>
         {lines.map(({ item, productName, productImageUri }) => (
           <View key={item.id} style={styles.line}>
             <Thumbnail name={productName} imageUri={productImageUri} size={40} />
@@ -160,23 +160,20 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
           </View>
         ))}
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Montant total</Text>
+          <Text style={styles.totalLabel}>{t.totalAmount}</Text>
           <Text style={styles.totalValue}>{formatMoney(order.totalAmount)}</Text>
         </View>
       </View>
 
       {hasShortage ? (
         <View style={[styles.card, styles.shortageCard]}>
-          <Text style={styles.shortageTitle}>Stock insuffisant</Text>
-          <Text style={styles.meta}>La commande ne peut pas être validée tant que le stock ne suffit pas.</Text>
+          <Text style={styles.shortageTitle}>{t.shortageTitle}</Text>
+          <Text style={styles.meta}>{t.shortageMessage}</Text>
           {shortages.map((shortage) => (
             <View key={shortage.productId} style={styles.shortageRow}>
-              <Text style={styles.value}>
-                {shortage.productName} : {shortage.requested} demandé(s),{' '}
-                {shortage.available > 0 ? `${shortage.available} disponible(s)` : 'épuisé'}
-              </Text>
+              <Text style={styles.value}>{t.shortageLine(shortage.productName, shortage.requested, shortage.available)}</Text>
               <AppButton
-                label={`Ajouter du stock (${shortage.productName})`}
+                label={t.addStock(shortage.productName)}
                 variant="secondary"
                 onPress={() => router.push({ pathname: '/stock/[productId]', params: { productId: shortage.productId } })}
                 disabled={busy}
@@ -184,18 +181,18 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
             </View>
           ))}
           {canAdjust ? (
-            <AppButton label="Ajuster au stock disponible" onPress={() => void adjust()} disabled={busy} />
+            <AppButton label={t.adjustButton} onPress={() => void adjust()} disabled={busy} />
           ) : null}
         </View>
       ) : null}
 
       {transitions.length > 0 ? (
         <View style={styles.actions}>
-          <Text style={styles.sectionTitle}>Changer le statut</Text>
+          <Text style={styles.sectionTitle}>{t.changeStatus}</Text>
           {transitions.map((target) => (
             <AppButton
               key={target}
-              label={ORDER_ACTION_LABELS[target]}
+              label={t.actionLabels[target]}
               variant={actionVariant(target)}
               onPress={() => void changeStatus(target)}
               disabled={busy}
@@ -208,26 +205,26 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
         <View style={styles.actions}>
           {isOrderEditable(order.status) ? (
             <AppButton
-              label="Modifier la commande"
+              label={t.editOrder}
               variant="secondary"
               onPress={() => router.push({ pathname: '/orders/[id]/edit', params: { id: order.id } })}
               disabled={busy}
             />
           ) : null}
           {isOrderDeletable(order.status) ? (
-            <AppButton label="Supprimer la commande" variant="secondary" onPress={() => void remove()} disabled={busy} />
+            <AppButton label={t.deleteOrder} variant="secondary" onPress={() => void remove()} disabled={busy} />
           ) : null}
         </View>
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Historique</Text>
+        <Text style={styles.sectionTitle}>{t.history}</Text>
         {history.map((change) => (
           <View key={change.id} style={styles.historyRow}>
             <Text style={styles.value}>
               {change.fromStatus === null
-                ? `Créée (${ORDER_STATUS_LABELS[change.toStatus]})`
-                : `${ORDER_STATUS_LABELS[change.fromStatus]} → ${ORDER_STATUS_LABELS[change.toStatus]}`}
+                ? t.created(orderStatus[change.toStatus])
+                : `${orderStatus[change.fromStatus]} → ${orderStatus[change.toStatus]}`}
             </Text>
             <Text style={styles.meta}>{formatDisplayDateTime(change.createdAt)}</Text>
           </View>

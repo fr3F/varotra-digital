@@ -2,6 +2,9 @@ import { ReactElement, ReactNode, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { EmptyState } from './StatusViews';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
+import { sharedMessages } from '../shared.messages';
 
 interface SelectionModalProps<T> {
   readonly visible: boolean;
@@ -36,9 +39,11 @@ export function SelectionModal<T>({
   renderItem,
   onSelect,
   onClose,
-  emptyMessage = 'Aucun élément.',
+  emptyMessage,
   header,
 }: SelectionModalProps<T>) {
+  const t = useMessages(sharedMessages);
+  const common = useMessages(commonMessages);
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
@@ -57,15 +62,15 @@ export function SelectionModal<T>({
         <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
           <Pressable accessibilityRole="button" onPress={close} hitSlop={12}>
-            <Text style={styles.close}>Fermer</Text>
+            <Text style={styles.close}>{common.actions.close}</Text>
           </Pressable>
         </View>
         <View style={styles.toolbar}>
           <TextInput
-            accessibilityLabel={`Rechercher : ${title}`}
+            accessibilityLabel={t.searchIn(title)}
             value={search}
             onChangeText={setSearch}
-            placeholder="Rechercher"
+            placeholder={common.actions.search}
             placeholderTextColor={colors.textMuted}
             style={styles.search}
             autoCorrect={false}
@@ -88,7 +93,7 @@ export function SelectionModal<T>({
               {renderItem(item)}
             </Pressable>
           )}
-          ListEmptyComponent={<EmptyState title={search ? 'Aucun résultat' : emptyMessage} />}
+          ListEmptyComponent={<EmptyState title={search ? t.noResult : (emptyMessage ?? t.noItems)} />}
         />
       </View>
     </Modal>

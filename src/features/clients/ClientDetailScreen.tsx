@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { toErrorMessage } from '@/core/errors/app-error';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { CustomerProfile, PurchaseHistoryEntry } from '@/models';
 import { customerService } from '@/services/customer.service';
@@ -16,18 +18,20 @@ import { formatDisplayDate, formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
 import { phoneDigits } from '@/utils/phone.utils';
 import { OrderStatusBadge } from '../orders/OrderStatusBadge';
+import { clientsMessages } from './clients.messages';
 
 function HistoryRow({ entry }: { readonly entry: PurchaseHistoryEntry }) {
+  const t = useMessages(clientsMessages);
   const isOrder = entry.kind === 'ORDER';
   const content = (
     <>
       <View style={styles.historyMain}>
         <View style={styles.historyTop}>
-          <Text style={styles.historyTitle}>{isOrder ? entry.reference : 'Vente directe'}</Text>
+          <Text style={styles.historyTitle}>{isOrder ? entry.reference : t.directSale}</Text>
           {entry.status !== null ? <OrderStatusBadge status={entry.status} /> : null}
         </View>
         <Text style={styles.meta}>
-          {formatDisplayDateTime(entry.occurredAt)} · {entry.itemCount} produit(s)
+          {formatDisplayDateTime(entry.occurredAt)} · {t.productCount(entry.itemCount)}
         </Text>
       </View>
       <Text
@@ -56,6 +60,8 @@ interface ClientDetailScreenProps {
 }
 
 export function ClientDetailScreen({ clientId }: ClientDetailScreenProps) {
+  const t = useMessages(clientsMessages);
+  const common = useMessages(commonMessages);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const { busy, error, run } = useAsyncAction();
@@ -76,7 +82,7 @@ export function ClientDetailScreen({ clientId }: ClientDetailScreenProps) {
   );
 
   const remove = async () => {
-    if (!(await confirmAction('Supprimer le client', 'Son historique d’achat sera conservé.', 'Supprimer'))) {
+    if (!(await confirmAction(t.deleteTitle, t.deleteMessage, common.actions.delete))) {
       return;
     }
     await run(async () => {
@@ -101,17 +107,17 @@ export function ClientDetailScreen({ clientId }: ClientDetailScreenProps) {
           <Thumbnail name={client.name} imageUri={null} size={64} />
           <View style={styles.identityTexts}>
             <Text style={styles.name}>{client.name}</Text>
-            <Text style={styles.meta}>Client depuis le {formatDisplayDate(client.createdAt)}</Text>
+            <Text style={styles.meta}>{t.clientSince(formatDisplayDate(client.createdAt))}</Text>
           </View>
         </View>
         <View style={styles.separator} />
-        <Text style={styles.label}>Téléphone</Text>
-        <Text style={styles.value}>{client.phone ?? 'Non renseigné'}</Text>
-        <Text style={[styles.label, styles.spaced]}>Adresse</Text>
-        <Text style={styles.value}>{client.address ?? 'Non renseignée'}</Text>
+        <Text style={styles.label}>{t.phone}</Text>
+        <Text style={styles.value}>{client.phone ?? t.notProvided}</Text>
+        <Text style={[styles.label, styles.spaced]}>{t.address}</Text>
+        <Text style={styles.value}>{client.address ?? t.addressNotProvided}</Text>
         {client.notes ? (
           <>
-            <Text style={[styles.label, styles.spaced]}>Notes</Text>
+            <Text style={[styles.label, styles.spaced]}>{t.notes}</Text>
             <Text style={styles.value}>{client.notes}</Text>
           </>
         ) : null}
@@ -119,10 +125,10 @@ export function ClientDetailScreen({ clientId }: ClientDetailScreenProps) {
 
       <View style={styles.actions}>
         {client.phone !== null ? (
-          <AppButton label="Appeler" onPress={() => void Linking.openURL(`tel:${phoneDigits(client.phone ?? '')}`)} />
+          <AppButton label={t.call} onPress={() => void Linking.openURL(`tel:${phoneDigits(client.phone ?? '')}`)} />
         ) : null}
         <AppButton
-          label="Modifier"
+          label={common.actions.edit}
           variant="secondary"
           onPress={() => router.push({ pathname: '/clients/[id]/edit', params: { id: client.id } })}
           disabled={busy}
@@ -130,30 +136,30 @@ export function ClientDetailScreen({ clientId }: ClientDetailScreenProps) {
       </View>
 
       <View style={styles.grid}>
-        <StatCard label="Total acheté" value={formatMoney(stats.totalSpent)} caption={`${stats.purchaseCount} achat(s)`} />
-        <StatCard label="Panier moyen" value={formatMoney(stats.averageBasket)} />
+        <StatCard label={t.totalSpent} value={formatMoney(stats.totalSpent)} caption={t.purchaseCount(stats.purchaseCount)} />
+        <StatCard label={t.averageBasket} value={formatMoney(stats.averageBasket)} />
         <StatCard
-          label="Commandes"
+          label={t.orders}
           value={String(stats.orderCount)}
-          caption={stats.openOrderCount > 0 ? `${stats.openOrderCount} en cours` : undefined}
+          caption={stats.openOrderCount > 0 ? t.openOrders(stats.openOrderCount) : undefined}
           tone={stats.openOrderCount > 0 ? 'warning' : 'default'}
         />
         <StatCard
-          label="Dernier achat"
+          label={t.lastPurchase}
           value={stats.lastPurchaseAt === null ? '—' : formatDisplayDate(stats.lastPurchaseAt)}
         />
       </View>
 
       {topProducts.length > 0 ? (
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Produits les plus achetés</Text>
+          <Text style={styles.sectionTitle}>{t.topProducts}</Text>
           {topProducts.map((product) => (
             <View key={product.productId} style={styles.productRow}>
               <Text style={styles.value} numberOfLines={1}>
                 {product.productName}
               </Text>
               <Text style={styles.meta}>
-                {product.quantity} unité(s) · {formatMoney(product.amount)}
+                {t.units(product.quantity, formatMoney(product.amount))}
               </Text>
             </View>
           ))}
@@ -161,15 +167,15 @@ export function ClientDetailScreen({ clientId }: ClientDetailScreenProps) {
       ) : null}
 
       <View style={styles.historyCard}>
-        <Text style={[styles.sectionTitle, styles.historyHeader]}>Historique d’achat</Text>
+        <Text style={[styles.sectionTitle, styles.historyHeader]}>{t.history}</Text>
         {history.length === 0 ? (
-          <EmptyState title="Aucun achat" message="Les commandes et ventes de ce client apparaîtront ici." />
+          <EmptyState icon="bag-outline" title={t.noPurchaseTitle} message={t.noPurchaseMessage} />
         ) : (
           history.map((entry) => <HistoryRow key={`${entry.kind}-${entry.id}`} entry={entry} />)
         )}
       </View>
 
-      <AppButton label="Supprimer le client" variant="danger" onPress={() => void remove()} disabled={busy} />
+      <AppButton label={t.deleteTitle} variant="danger" onPress={() => void remove()} disabled={busy} />
     </ScrollView>
   );
 }

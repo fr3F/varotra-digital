@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { DatabaseProvider } from '@/core/providers/DatabaseProvider';
 import { LanguageBridge } from '@/core/providers/LanguageBridge';
+import { LanguageMenu } from '@/core/i18n/LanguageMenu';
 import { MessengerSyncBridge } from '@/core/providers/MessengerSyncBridge';
 import { NotificationBridge } from '@/core/providers/NotificationBridge';
 import { colors } from '@/core/theme/theme';
@@ -22,6 +23,8 @@ export default function RootLayout() {
                 headerTintColor: colors.primary,
                 headerTitleStyle: { fontWeight: '700', color: colors.text },
                 headerShadowVisible: false,
+                // Choix de la langue visible sur tous les écrans.
+                headerRight: () => <LanguageMenu />,
                 contentStyle: { backgroundColor: colors.background },
               }}
             >

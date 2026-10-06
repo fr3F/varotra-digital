@@ -15,29 +15,12 @@ import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/Status
 import { formatMoney } from '@/utils/money.utils';
 import { useProducts } from '../products/useProducts';
 import { MovementRow } from './MovementRow';
-import { STOCK_LEVEL_LABELS } from './stock-labels';
 import { useStockHistory } from './useStockHistory';
+import { useMessages } from '@/core/i18n/i18n';
+import { stockMessages } from './stock.messages';
 
 type StockTab = 'PRODUCTS' | 'MOVEMENTS';
 type LevelFilter = StockLevel | null;
-
-const TAB_OPTIONS: readonly ChipOption<StockTab>[] = [
-  { value: 'PRODUCTS', label: 'Produits' },
-  { value: 'MOVEMENTS', label: 'Mouvements' },
-];
-
-const LEVEL_OPTIONS: readonly ChipOption<LevelFilter>[] = [
-  { value: null, label: 'Tous' },
-  { value: 'LOW', label: 'Stock bas' },
-  { value: 'OUT', label: 'Rupture' },
-];
-
-const TYPE_OPTIONS: readonly ChipOption<StockMovementType | null>[] = [
-  { value: null, label: 'Tous' },
-  { value: 'IN', label: 'Entrées' },
-  { value: 'OUT', label: 'Sorties' },
-  { value: 'ADJUSTMENT', label: 'Ajustements' },
-];
 
 const LEVEL_COLORS: Readonly<Record<StockLevel, { text: string; background: string }>> = {
   OUT: { text: colors.danger, background: colors.dangerLight },
@@ -50,15 +33,16 @@ function openStock(productId: string): void {
 }
 
 function StockRow({ product }: { readonly product: Product }) {
+  const t = useMessages(stockMessages);
   const level = stockLevelOf(product);
   const palette = LEVEL_COLORS[level];
   return (
     <ListRow
       title={product.name}
       subtitle={[
-        STOCK_LEVEL_LABELS[level],
-        product.reservedQuantity > 0 ? `${product.reservedQuantity} réservé(s)` : null,
-        `seuil ${product.alertThreshold}`,
+        t.level[level],
+        product.reservedQuantity > 0 ? t.reserved(product.reservedQuantity) : null,
+        t.threshold(product.alertThreshold),
       ]
         .filter(Boolean)
         .join(' · ')}
@@ -74,6 +58,15 @@ function StockRow({ product }: { readonly product: Product }) {
 }
 
 function ProductsTab() {
+  const t = useMessages(stockMessages);
+  const levelOptions = useMemo<readonly ChipOption<LevelFilter>[]>(
+    () => [
+      { value: null, label: t.all },
+      { value: 'LOW', label: t.filterLow },
+      { value: 'OUT', label: t.filterOut },
+    ],
+    [t],
+  );
   const [search, setSearch] = useState('');
   const [level, setLevel] = useState<LevelFilter>(null);
   const { products, loading, error } = useProducts({ search, category: null });
@@ -94,18 +87,17 @@ function ProductsTab() {
   const header = (
     <View style={styles.header}>
       <View style={styles.grid}>
-        <StatCard label="Unités en stock" value={String(summary.totalUnits)} caption={
-            summary.reservedUnits > 0
-              ? `dont ${summary.reservedUnits} réservée(s)`
-              : `${summary.productsCount} produit(s)`
-          }
+        <StatCard
+          label={t.unitsInStock}
+          value={String(summary.totalUnits)}
+          caption={summary.reservedUnits > 0 ? t.reservedUnits(summary.reservedUnits) : t.productsCount(summary.productsCount)}
         />
-        <StatCard label="Valeur (achat)" value={formatMoney(summary.valueAtCost)} caption={`vente : ${formatMoney(summary.valueAtPrice)}`} />
-        <StatCard label="Stock bas" value={String(summary.lowStockCount)} tone={summary.lowStockCount > 0 ? 'warning' : 'default'} />
-        <StatCard label="Ruptures" value={String(summary.outOfStockCount)} tone={summary.outOfStockCount > 0 ? 'negative' : 'default'} />
+        <StatCard label={t.valueAtCost} value={formatMoney(summary.valueAtCost)} caption={t.valueAtPrice(formatMoney(summary.valueAtPrice))} />
+        <StatCard label={t.lowStock} value={String(summary.lowStockCount)} tone={summary.lowStockCount > 0 ? 'warning' : 'default'} />
+        <StatCard label={t.outOfStock} value={String(summary.outOfStockCount)} tone={summary.outOfStockCount > 0 ? 'negative' : 'default'} />
       </View>
-      <SearchField accessibilityLabel="Rechercher dans le stock" value={search} onChangeText={setSearch} placeholder="Rechercher un produit" />
-      <ChipGroup accessibilityLabel="Filtrer par niveau de stock" options={LEVEL_OPTIONS} selected={level} onSelect={setLevel} />
+      <SearchField accessibilityLabel={t.searchLabel} value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder} />
+      <ChipGroup accessibilityLabel={t.levelFilter} options={levelOptions} selected={level} onSelect={setLevel} />
       <ErrorBanner message={error} />
     </View>
   );
@@ -123,8 +115,9 @@ function ProductsTab() {
       keyboardShouldPersistTaps="handled"
       ListEmptyComponent={
         <EmptyState
-          title={allProducts.length === 0 ? 'Aucun produit' : 'Aucun résultat'}
-          message={allProducts.length === 0 ? 'Créez un produit pour suivre son stock.' : undefined}
+          icon="layers-outline"
+          title={allProducts.length === 0 ? t.noProduct : t.noResult}
+          message={allProducts.length === 0 ? t.noProductHint : undefined}
         />
       }
     />
@@ -132,6 +125,16 @@ function ProductsTab() {
 }
 
 function MovementsTab() {
+  const t = useMessages(stockMessages);
+  const typeOptions = useMemo<readonly ChipOption<StockMovementType | null>[]>(
+    () => [
+      { value: null, label: t.all },
+      { value: 'IN', label: t.typeIn },
+      { value: 'OUT', label: t.typeOut },
+      { value: 'ADJUSTMENT', label: t.typeAdjustment },
+    ],
+    [t],
+  );
   const [type, setType] = useState<StockMovementType | null>(null);
   const fetchRecent = useCallback(() => stockMovementService.listRecent({ type, limit: 200 }), [type]);
   const history = useStockHistory(fetchRecent);
@@ -143,32 +146,40 @@ function MovementsTab() {
       renderItem={({ item }) => (
         <MovementRow
           movement={item.movement}
-          productName={item.productDeleted ? `${item.productName} (supprimé)` : item.productName}
+          productName={item.productDeleted ? t.deleted(item.productName) : item.productName}
         />
       )}
       refreshing={history.loading}
       onRefresh={history.reload}
       ListHeaderComponent={
         <View style={styles.header}>
-          <ChipGroup accessibilityLabel="Filtrer par type de mouvement" options={TYPE_OPTIONS} selected={type} onSelect={setType} />
+          <ChipGroup accessibilityLabel={t.typeFilter} options={typeOptions} selected={type} onSelect={setType} />
           <ErrorBanner message={history.error} />
         </View>
       }
       ListEmptyComponent={
-        history.loading ? null : <EmptyState title="Aucun mouvement" message="Les entrées et sorties de stock apparaîtront ici." />
+        history.loading ? null : <EmptyState icon="swap-vertical-outline" title={t.noMovement} message={t.noMovementHint} />
       }
     />
   );
 }
 
 export function StockScreen() {
+  const t = useMessages(stockMessages);
+  const tabOptions = useMemo<readonly ChipOption<StockTab>[]>(
+    () => [
+      { value: 'PRODUCTS', label: t.tabProducts },
+      { value: 'MOVEMENTS', label: t.tabMovements },
+    ],
+    [t],
+  );
   const [tab, setTab] = useState<StockTab>('PRODUCTS');
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Stock' }} />
+      <Stack.Screen options={{ title: t.title }} />
       <View style={styles.tabs}>
-        <ChipGroup accessibilityLabel="Vue du stock" options={TAB_OPTIONS} selected={tab} onSelect={setTab} />
+        <ChipGroup accessibilityLabel={t.view} options={tabOptions} selected={tab} onSelect={setTab} />
       </View>
       {tab === 'PRODUCTS' ? <ProductsTab /> : <MovementsTab />}
     </View>

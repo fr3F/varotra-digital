@@ -1,17 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, Stack } from 'expo-router';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
-import {
-  Expense,
-  EXPENSE_CATEGORIES,
-  EXPENSE_CATEGORY_LABELS,
-  ExpenseCategory,
-  Period,
-  PERIOD_LABELS,
-  PERIODS,
-} from '@/models';
+import { Expense, EXPENSE_CATEGORIES, ExpenseCategory, Period, PERIODS } from '@/models';
 import { expenseService, expensesVersion } from '@/services/expense.service';
 import { BarList } from '@/shared/components/charts/BarList';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
@@ -19,14 +13,10 @@ import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/Status
 import { useQuery } from '@/shared/hooks/useQuery';
 import { formatDisplayDate } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
-
-const PERIOD_OPTIONS: readonly ChipOption<Period>[] = PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }));
-const CATEGORY_OPTIONS: readonly ChipOption<ExpenseCategory | null>[] = [
-  { value: null, label: 'Toutes' },
-  ...EXPENSE_CATEGORIES.map((value) => ({ value, label: EXPENSE_CATEGORY_LABELS[value] })),
-];
+import { expensesMessages } from './expenses.messages';
 
 function ExpenseRow({ expense }: { readonly expense: Expense }) {
+  const common = useMessages(commonMessages);
   return (
     <Pressable
       accessibilityRole="button"
@@ -38,7 +28,7 @@ function ExpenseRow({ expense }: { readonly expense: Expense }) {
           {expense.label}
         </Text>
         <Text style={styles.meta}>
-          {formatDisplayDate(expense.spentAt)} · {EXPENSE_CATEGORY_LABELS[expense.category]}
+          {formatDisplayDate(expense.spentAt)} · {common.expenseCategory[expense.category]}
         </Text>
       </View>
       <Text style={styles.amount}>−{formatMoney(expense.amount)}</Text>
@@ -47,6 +37,19 @@ function ExpenseRow({ expense }: { readonly expense: Expense }) {
 }
 
 export function ExpenseListScreen() {
+  const t = useMessages(expensesMessages);
+  const common = useMessages(commonMessages);
+  const periodOptions = useMemo<readonly ChipOption<Period>[]>(
+    () => PERIODS.map((value) => ({ value, label: common.period[value] })),
+    [common],
+  );
+  const categoryOptions = useMemo<readonly ChipOption<ExpenseCategory | null>[]>(
+    () => [
+      { value: null, label: t.allCategories },
+      ...EXPENSE_CATEGORIES.map((value) => ({ value, label: common.expenseCategory[value] })),
+    ],
+    [t, common],
+  );
   const [period, setPeriod] = useState<Period>('MONTH');
   const [category, setCategory] = useState<ExpenseCategory | null>(null);
   const version = useStore(expensesVersion);
@@ -65,15 +68,15 @@ export function ExpenseListScreen() {
     () =>
       (data?.byCategory ?? []).map((entry) => ({
         key: entry.category,
-        label: EXPENSE_CATEGORY_LABELS[entry.category],
+        label: common.expenseCategory[entry.category],
         value: entry.total,
       })),
-    [data],
+    [data, common],
   );
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Dépenses' }} />
+      <Stack.Screen options={{ title: t.title }} />
       <FlatList
         data={data?.expenses ?? []}
         keyExtractor={(expense) => expense.id}
@@ -82,23 +85,23 @@ export function ExpenseListScreen() {
         onRefresh={reload}
         ListHeaderComponent={
           <View style={styles.header}>
-            <ChipGroup accessibilityLabel="Période" options={PERIOD_OPTIONS} selected={period} onSelect={setPeriod} />
+            <ChipGroup accessibilityLabel={t.periodLabel} options={periodOptions} selected={period} onSelect={setPeriod} />
             <View style={styles.totalCard}>
               <Text style={styles.totalLabel}>
-                Total {category === null ? '' : `« ${EXPENSE_CATEGORY_LABELS[category]} » `}· {PERIOD_LABELS[period]}
+                {t.totalLabel(category === null ? null : common.expenseCategory[category], common.period[period])}
               </Text>
               <Text style={styles.totalValue}>{formatMoney(total)}</Text>
-              <Text style={styles.meta}>{data?.expenses.length ?? 0} dépense(s)</Text>
+              <Text style={styles.meta}>{t.expenseCount(data?.expenses.length ?? 0)}</Text>
             </View>
             {chartData.length > 0 && category === null ? (
               <View style={styles.chartCard}>
-                <Text style={styles.chartTitle}>Répartition par catégorie</Text>
+                <Text style={styles.chartTitle}>{t.byCategory}</Text>
                 <BarList data={chartData} formatValue={formatMoney} />
               </View>
             ) : null}
             <ChipGroup
-              accessibilityLabel="Filtrer par catégorie"
-              options={CATEGORY_OPTIONS}
+              accessibilityLabel={t.filterByCategory}
+              options={categoryOptions}
               selected={category}
               onSelect={setCategory}
             />
@@ -109,7 +112,7 @@ export function ExpenseListScreen() {
           data === null ? (
             <LoadingView />
           ) : (
-            <EmptyState icon="wallet-outline" title="Aucune dépense" message="Aucune dépense sur cette période." />
+            <EmptyState icon="wallet-outline" title={t.emptyTitle} message={t.emptyMessage} />
           )
         }
       />

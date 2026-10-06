@@ -12,6 +12,8 @@ import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/Status
 import { formatMoney } from '@/utils/money.utils';
 import { Thumbnail } from '@/shared/components/Thumbnail';
 import { useProducts } from './useProducts';
+import { useMessages } from '@/core/i18n/i18n';
+import { productsMessages } from './products.messages';
 
 function openProduct(id: string): void {
   router.push({ pathname: '/products/[id]', params: { id } });
@@ -19,11 +21,12 @@ function openProduct(id: string): void {
 
 /** Carte produit (modèle « Bite ») : photo, nom, stock, prix en rouge. */
 function ProductCard({ product }: { readonly product: Product }) {
+  const t = useMessages(productsMessages);
   const low = isLowStock(product);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${product.name}, ${formatMoney(product.unitPrice)}, stock ${product.stockQuantity}`}
+      accessibilityLabel={t.cardLabel(product.name, formatMoney(product.unitPrice), product.stockQuantity)}
       onPress={() => openProduct(product.id)}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
@@ -35,7 +38,7 @@ function ProductCard({ product }: { readonly product: Product }) {
       </Text>
       <Text style={[styles.stock, low && styles.stockLow]}>
         {low ? '🔥 ' : ''}
-        {product.stockQuantity} en stock
+        {t.inStock(product.stockQuantity)}
       </Text>
       <View style={styles.cardFooter}>
         <Text style={styles.price}>{formatMoney(product.unitPrice)}</Text>
@@ -49,6 +52,7 @@ function ProductCard({ product }: { readonly product: Product }) {
 const CARD_IMAGE_SIZE = 140;
 
 export function ProductListScreen() {
+  const t = useMessages(productsMessages);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const { products, categories, totalCount, lowStockCount, loading, error, reload } = useProducts({
@@ -57,19 +61,19 @@ export function ProductListScreen() {
   });
 
   const categoryOptions = useMemo<readonly ChipOption<string | null>[]>(
-    () => [{ value: null, label: 'Toutes' }, ...categories.map((value) => ({ value, label: value }))],
-    [categories],
+    () => [{ value: null, label: t.allCategories }, ...categories.map((value) => ({ value, label: value }))],
+    [categories, t],
   );
   const isFiltered = search.trim().length > 0 || category !== null;
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Produits' }} />
+      <Stack.Screen options={{ title: t.title }} />
       <View style={styles.toolbar}>
-        <SearchField accessibilityLabel="Rechercher un produit" value={search} onChangeText={setSearch} placeholder="Rechercher (nom, référence, catégorie)" />
+        <SearchField accessibilityLabel={t.searchLabel} value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder} />
         {categories.length > 0 ? (
           <ChipGroup
-            accessibilityLabel="Filtrer par catégorie"
+            accessibilityLabel={t.categoryFilter}
             options={categoryOptions}
             selected={category}
             onSelect={setCategory}
@@ -77,9 +81,9 @@ export function ProductListScreen() {
         ) : null}
         <View style={styles.summary}>
           <Text style={styles.count}>
-            {isFiltered ? `${products.length} sur ${totalCount} produit(s)` : `${totalCount} produit(s)`}
+            {isFiltered ? t.filteredCount(products.length, totalCount) : t.count(totalCount)}
           </Text>
-          {lowStockCount > 0 ? <Text style={styles.warning}>{lowStockCount} en stock bas</Text> : null}
+          {lowStockCount > 0 ? <Text style={styles.warning}>{t.lowStockCount(lowStockCount)}</Text> : null}
         </View>
         <ErrorBanner message={error} />
       </View>
@@ -100,15 +104,15 @@ export function ProductListScreen() {
           ListEmptyComponent={
             <EmptyState
               icon={isFiltered ? 'search-outline' : 'cube-outline'}
-              title={isFiltered ? 'Aucun résultat' : 'Aucun produit'}
-              message={isFiltered ? 'Essayez un autre mot ou une autre catégorie.' : 'Ajoutez votre premier produit pour commencer.'}
+              title={isFiltered ? t.noResult : t.empty}
+              message={isFiltered ? t.noResultHint : t.emptyHint}
             />
           }
         />
       )}
 
       <View style={styles.footer}>
-        <AppButton label="+ Nouveau produit" onPress={() => openProduct(NEW_ENTITY_ID)} />
+        <AppButton label={t.add} onPress={() => openProduct(NEW_ENTITY_ID)} />
       </View>
     </View>
   );
