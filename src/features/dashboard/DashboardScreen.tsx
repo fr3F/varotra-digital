@@ -8,7 +8,7 @@ import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
 import { commonMessages } from '@/core/i18n/common.messages';
 import { useMessages } from '@/core/i18n/i18n';
-import { availableQuantity, Period, PERIODS } from '@/models';
+import { availableQuantity, Period, PERIODS, REVENUE_GRANULARITIES, RevenueGranularity } from '@/models';
 import { dashboardService } from '@/services/dashboard.service';
 import { expensesVersion } from '@/services/expense.service';
 import { orderStore } from '@/services/order.service';
@@ -21,7 +21,6 @@ import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
 import { StatCard } from '@/shared/components/StatCard';
 import { ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { useQuery } from '@/shared/hooks/useQuery';
-import { formatShortDay } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
 import { dashboardMessages } from './dashboard.messages';
 
@@ -69,16 +68,36 @@ export function DashboardScreen() {
     }, [reload]),
   );
 
-  const chartData = useMemo(
-    () =>
-      (data?.last7Days ?? []).map((day) => ({
-        key: day.day,
-        label: formatShortDay(day.day),
-        value: day.revenue,
-        detail: t.dayDetail(formatMoney(day.profit), day.salesCount),
-      })),
-    [data, t],
+  // Graphique du chiffre d'affaires : découpage choisi (jours, semaines, mois, années).
+  const [granularity, setGranularity] = useState<RevenueGranularity>('DAY');
+  const fetchSeries = useCallback(() => dashboardService.revenueSeries(granularity), [granularity]);
+  const { data: series } = useQuery(fetchSeries, version);
+  const granularityOptions = useMemo<readonly ChipOption<RevenueGranularity>[]>(
+    () => REVENUE_GRANULARITIES.map((value) => ({ value, label: t.granularity[value] })),
+    [t],
   );
+  const chartData = useMemo(() => {
+    const label = (iso: string): string => {
+      const date = new Date(iso);
+      const dayMonth = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      switch (granularity) {
+        case 'DAY':
+          return `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()}`;
+        case 'WEEK':
+          return t.weekStart(dayMonth);
+        case 'MONTH':
+          return t.monthsShort[date.getMonth()] ?? '';
+        case 'YEAR':
+          return String(date.getFullYear());
+      }
+    };
+    return (series ?? []).map((bucket) => ({
+      key: bucket.day,
+      label: label(bucket.day),
+      value: bucket.revenue,
+      detail: t.dayDetail(formatMoney(bucket.profit), bucket.salesCount),
+    }));
+  }, [series, granularity, t]);
   const expenseData = useMemo(
     () =>
       (data?.expensesByCategory ?? []).map((entry) => ({
@@ -164,8 +183,17 @@ export function DashboardScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t.revenueChart}</Text>
-            <ColumnChart data={chartData} formatValue={formatMoney} />
+            <Text style={styles.cardTitle}>
+              {t.revenueChart} · {t.granularityRange[granularity]}
+            </Text>
+            <ChipGroup
+              accessibilityLabel={t.revenueChart}
+              options={granularityOptions}
+              selected={granularity}
+              onSelect={setGranularity}
+            />
+            {/* key : le graphique repart sur la barre la plus récente à chaque changement de découpage. */}
+            <ColumnChart key={granularity} data={chartData} formatValue={formatMoney} />
           </View>
 
           {expenseData.length > 0 ? (

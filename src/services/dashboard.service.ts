@@ -2,24 +2,45 @@ import { dashboardRepository } from '@/database/repositories/dashboard.repositor
 import { expenseRepository } from '@/database/repositories/expense.repository';
 import { productRepository } from '@/database/repositories/product.repository';
 import { saleRepository } from '@/database/repositories/sale.repository';
-import { availableQuantity, DashboardData, isLowStock, Period, periodStart } from '@/models';
+import {
+  availableQuantity,
+  DailyRevenue,
+  DashboardData,
+  isLowStock,
+  Period,
+  periodStart,
+  REVENUE_BUCKET_COUNTS,
+  RevenueGranularity,
+} from '@/models';
 
 const LOW_STOCK_PREVIEW = 5;
 
-/** Débuts des 7 derniers jours locaux (le plus ancien d'abord), en ISO. */
-function last7DayStarts(reference: Date): string[] {
-  return Array.from({ length: 7 }, (_, index) =>
-    new Date(reference.getFullYear(), reference.getMonth(), reference.getDate() - (6 - index)).toISOString(),
-  );
+/** Début (local) de l'intervalle contenant `reference`, décalé de `offset` intervalles. */
+function bucketStart(granularity: RevenueGranularity, reference: Date, offset: number): Date {
+  const year = reference.getFullYear();
+  const month = reference.getMonth();
+  const day = reference.getDate();
+  switch (granularity) {
+    case 'DAY':
+      return new Date(year, month, day + offset);
+    case 'WEEK': {
+      // Semaines du lundi au dimanche.
+      const monday = day - ((reference.getDay() + 6) % 7);
+      return new Date(year, month, monday + offset * 7);
+    }
+    case 'MONTH':
+      return new Date(year, month + offset, 1);
+    case 'YEAR':
+      return new Date(year + offset, 0, 1);
+  }
 }
 
 /** Indicateurs du tableau de bord, calculés à partir de SQLite. */
 export const dashboardService = {
   async load(period: Period, reference: Date = new Date()): Promise<DashboardData> {
     const since = periodStart(period, reference);
-    const end = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate() + 1).toISOString();
 
-    const [today, periodSales, expenses, ordersCreated, openOrders, products, last7Days, expensesByCategory] =
+    const [today, periodSales, expenses, ordersCreated, openOrders, products, expensesByCategory] =
       await Promise.all([
         saleRepository.totals(periodStart('TODAY', reference)),
         saleRepository.totals(since),
@@ -27,7 +48,6 @@ export const dashboardService = {
         dashboardRepository.countOrdersSince(since),
         dashboardRepository.countOpenOrders(),
         productRepository.findAll(),
-        dashboardRepository.revenueByDay(last7DayStarts(reference), end),
         expenseRepository.totalsByCategory(since),
       ]);
 
@@ -51,8 +71,20 @@ export const dashboardService = {
       lowStockCount: lowStock.length,
       productCount: products.length,
       outOfStockCount: lowStock.filter((product) => availableQuantity(product) === 0).length,
-      last7Days,
       expensesByCategory,
     };
+  },
+
+  /**
+   * Chiffre d'affaires et bénéfice par intervalle (le plus ancien d'abord), jusqu'à l'intervalle
+   * en cours inclus : 7 jours, 8 semaines, 12 mois ou 5 ans.
+   */
+  revenueSeries(granularity: RevenueGranularity, reference: Date = new Date()): Promise<DailyRevenue[]> {
+    const count = REVENUE_BUCKET_COUNTS[granularity];
+    const starts = Array.from({ length: count }, (_, index) =>
+      bucketStart(granularity, reference, index - (count - 1)).toISOString(),
+    );
+    const end = bucketStart(granularity, reference, 1).toISOString();
+    return dashboardRepository.revenueByDay(starts, end);
   },
 };
