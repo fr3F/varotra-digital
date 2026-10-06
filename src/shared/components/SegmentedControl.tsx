@@ -27,7 +27,8 @@ export function SegmentedControl<T>({ options, selected, onSelect, accessibility
             onPress={() => onSelect(option.value)}
             style={[styles.segment, active && styles.segmentActive]}
           >
-            <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
+            {/* Libellé long (ex. « Ity volana ity ») : réduit légèrement plutôt que tronqué. */}
+            <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
               {option.label}
             </Text>
           </Pressable>

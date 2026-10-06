@@ -11,6 +11,7 @@ import { useMessages } from '@/core/i18n/i18n';
 import {
   availableQuantity,
   Period,
+  periodStart,
   PERIODS,
   REVENUE_BUCKET_COUNTS,
   REVENUE_COUNT_LIMITS,
@@ -25,7 +26,6 @@ import { stockMovementVersion } from '@/services/stock-movement.service';
 import { AppButton } from '@/shared/components/AppButton';
 import { BarList } from '@/shared/components/charts/BarList';
 import { ColumnChart } from '@/shared/components/charts/ColumnChart';
-import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
 import { NumberStepper } from '@/shared/components/NumberStepper';
 import { SegmentedControl, SegmentOption } from '@/shared/components/SegmentedControl';
 import { StatCard } from '@/shared/components/StatCard';
@@ -59,11 +59,24 @@ export function DashboardScreen() {
   const t = useMessages(dashboardMessages);
   const common = useMessages(commonMessages);
   const [period, setPeriod] = useState<Period>('TODAY');
-  const periodOptions = useMemo<readonly ChipOption<Period>[]>(
+  const periodOptions = useMemo<readonly SegmentOption<Period>[]>(
     () => PERIODS.map((value) => ({ value, label: common.period[value] })),
     [common],
   );
   const { width } = useWindowDimensions();
+  // Dates lisibles dans la langue choisie : « mar. 6 oct. », « 30/09 ».
+  const today = new Date();
+  const longDay = (date: Date) =>
+    `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()} ${t.monthsShort[date.getMonth()] ?? ''}`;
+  const shortDay = (date: Date) =>
+    `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const start = periodStart(period, today);
+  const periodRange =
+    start === null
+      ? t.allTime
+      : period === 'TODAY'
+        ? longDay(today)
+        : `${shortDay(new Date(start))} – ${shortDay(today)}`;
   const basis = width >= WIDE_LAYOUT ? '22%' : '45%';
 
   // Toute écriture (vente, dépense, stock, commande) rafraîchit les indicateurs.
@@ -153,7 +166,13 @@ export function DashboardScreen() {
       ) : (
         <>
           <View style={styles.hero}>
-            <Text style={styles.heroLabel}>{t.revenueToday}</Text>
+            <View style={styles.heroTop}>
+              <Text style={styles.heroLabel}>{t.revenueToday}</Text>
+              <View style={styles.heroDate}>
+                <Ionicons name="calendar-outline" size={14} color={colors.onPrimary} />
+                <Text style={styles.heroDateText}>{longDay(today)}</Text>
+              </View>
+            </View>
             <Text style={styles.heroValue}>{formatMoney(data.revenueToday)}</Text>
             <Text style={styles.heroCaption}>{t.salesToday(data.salesTodayCount)}</Text>
             <View style={styles.heroActions}>
@@ -167,7 +186,12 @@ export function DashboardScreen() {
             </View>
           </View>
 
-          <ChipGroup accessibilityLabel={t.period} options={periodOptions} selected={period} onSelect={setPeriod} />
+          {/* Indicateurs de la période choisie : titre + dates exactes, puis choix de la période. */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeading}>{t.indicators}</Text>
+            <Text style={styles.sectionRange}>{periodRange}</Text>
+          </View>
+          <SegmentedControl accessibilityLabel={t.period} options={periodOptions} selected={period} onSelect={setPeriod} />
 
           <View style={styles.grid}>
             <StatCard
@@ -314,7 +338,21 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
   contentWide: { maxWidth: 1100, width: '100%', alignSelf: 'center' },
   hero: { padding: spacing.xl, borderRadius: radius.lg, backgroundColor: colors.primary },
-  heroLabel: { color: colors.primaryLight, fontSize: fontSize.md },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  heroLabel: { flexShrink: 1, color: colors.primaryLight, fontSize: fontSize.md, fontWeight: '600' },
+  heroDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  heroDateText: { color: colors.onPrimary, fontSize: fontSize.sm, fontWeight: '700' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm },
+  sectionHeading: { fontSize: fontSize.lg, fontWeight: '800', color: colors.text },
+  sectionRange: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textMuted },
   heroValue: { color: colors.onPrimary, fontSize: 34, fontWeight: '800', fontVariant: ['tabular-nums'] },
   heroCaption: { color: colors.primaryLight, fontSize: fontSize.sm },
   heroActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
