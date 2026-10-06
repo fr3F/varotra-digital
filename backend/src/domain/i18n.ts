@@ -99,6 +99,19 @@ export interface Messages {
     readonly nudge: string;
     readonly cartWaiting: string;
   };
+  /** Réponses aux questions, client fidèle, remerciements. */
+  readonly smart: {
+    readonly inStock: string;
+    readonly soldOutNow: string;
+    readonly askQuantity: string;
+    readonly soldOutAlternatives: string;
+    readonly buy: (productName: string) => string;
+    readonly welcomeBack: (customerName: string | null) => string;
+    readonly reorder: string;
+    readonly reorderIntro: string;
+    readonly noPreviousOrder: string;
+    readonly thanks: string;
+  };
 }
 
 export const MESSAGES: Readonly<Record<Lang, Messages>> = {
@@ -164,6 +177,18 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
       nudge: '👉 Validez maintenant : le vendeur prépare votre commande dès confirmation.',
       cartWaiting: 'Votre panier vous attend 🛒 Il ne reste qu’à valider !',
     },
+    smart: {
+      inStock: '✅ Disponible',
+      soldOutNow: '😔 Épuisé pour le moment',
+      askQuantity: 'Combien en voulez-vous ? (ou écrivez un nombre)',
+      soldOutAlternatives: 'Voici ce qui est disponible :',
+      buy: (name) => `🛒 ${name}`,
+      welcomeBack: (name) => `Ravi de vous revoir${name === null ? '' : ` ${name}`} 👋`,
+      reorder: '🔁 Comme avant',
+      reorderIntro: 'Votre dernière commande, prête à être validée 🔁',
+      noPreviousOrder: 'Vous n’avez pas encore commandé ici.',
+      thanks: 'Merci à vous 🙏 Écrivez-nous quand vous voulez, nous sommes là !',
+    },
   },
 
   mg: {
@@ -228,6 +253,18 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
       nudge: '👉 Hamafiso izao dia hanomana ny kaomandinao avy hatrany ny mpivarotra.',
       cartWaiting: 'Mbola miandry anao ny haronao 🛒 Hamafiso fotsiny dia vita !',
     },
+    smart: {
+      inStock: '✅ Misy',
+      soldOutNow: '😔 Lany amin’izao',
+      askQuantity: 'Firy no ilainao ? (na soraty ny isa)',
+      soldOutAlternatives: 'Ireto kosa no misy :',
+      buy: (name) => `🛒 ${name}`,
+      welcomeBack: (name) => `Faly mahita anao indray${name === null ? '' : ` ${name}`} 👋`,
+      reorder: '🔁 Toy ny teo',
+      reorderIntro: 'Ity ny kaomandinao farany, vonona hamafisina 🔁',
+      noPreviousOrder: 'Mbola tsy nanafatra teto ianao.',
+      thanks: 'Misaotra anao koa 🙏 Eto foana izahay raha mila zavatra ianao !',
+    },
   },
 
   en: {
@@ -291,6 +328,18 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
       suggestion: (names) => `💡 Often bought with: ${names}`,
       nudge: '👉 Confirm now and the seller will prepare your order right away.',
       cartWaiting: 'Your cart is waiting 🛒 Just confirm it and you’re done!',
+    },
+    smart: {
+      inStock: '✅ In stock',
+      soldOutNow: '😔 Sold out for now',
+      askQuantity: 'How many would you like? (or type a number)',
+      soldOutAlternatives: 'Here is what is available:',
+      buy: (name) => `🛒 ${name}`,
+      welcomeBack: (name) => `Great to see you again${name === null ? '' : ` ${name}`} 👋`,
+      reorder: '🔁 Same again',
+      reorderIntro: 'Your last order, ready to confirm 🔁',
+      noPreviousOrder: 'You haven’t ordered here yet.',
+      thanks: 'Thank you 🙏 Write to us anytime, we’re here!',
     },
   },
 };

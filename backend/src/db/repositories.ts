@@ -283,6 +283,12 @@ export function createRepositories(db: SqlDb) {
         return row === null ? null : toDraft(row);
       },
       /** Dernière commande du client (réponse à « statut ? »). */
+      /** Produits déjà commandés par ce client, du plus récent au plus ancien (sans doublon). */
+      async productIdsOrderedBy(psid: string): Promise<string[]> {
+        const rows = await db.all('SELECT items_json FROM order_drafts WHERE psid = ? ORDER BY created_at DESC LIMIT 20', [psid]);
+        const ids = rows.flatMap((row) => parseItems(readString(row, 'items_json')).map((item) => item.productId));
+        return [...new Set(ids)];
+      },
       async findLatestByPsid(psid: string): Promise<OrderDraft | null> {
         const row = await db.first('SELECT * FROM order_drafts WHERE psid = ? ORDER BY created_at DESC LIMIT 1', [psid]);
         return row === null ? null : toDraft(row);

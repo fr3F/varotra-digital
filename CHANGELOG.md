@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 ## [Unreleased]
 
 ### Ajouté
+- Bot intelligent : fautes de frappe tolérées (« kirarro », « tshirt »), réponses aux questions de prix, de disponibilité et de description (« ohatrinona ny kiraro ? », « vous avez des casquettes ? »), client fidèle reconnu (« Faly mahita anao indray », bouton et phrase « toy ny teo » pour recommander), suggestions selon ses achats, réponse polie aux remerciements.
 - Bot vendeur : produits les plus commandés mis en avant (⭐, ventes réelles des 30 derniers jours), stock faible signalé (🔥 vrai chiffre), description du produit (saisie dans l'application), produits complémentaires proposés dans le panier, invitation à valider, accueil plus engageant, relance unique d'un panier abandonné après 1 h (dans les 24 h Messenger).
 - Bot Messenger multilingue : comprend le malgache, le français et l'anglais (langue détectée sur chaque message, réponses et boutons dans la langue du client), nombres en lettres (« roa ambin'ny folo », « vingt-cinq », « twelve », « une douzaine »), « eny / oui / yes » pour valider. Dans une autre langue, chiffres et noms de produits restent compris.
 - Notifications push « Nouvelle commande » envoyées par le serveur (Expo Push), même application fermée ; un appui importe et ouvre la commande. Nécessite l'APK (projet EAS + FCM).

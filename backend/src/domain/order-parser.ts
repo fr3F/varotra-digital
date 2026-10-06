@@ -45,13 +45,43 @@ function tokensOf(text: string): string[] {
   );
 }
 
-/** Deux mots correspondent s'ils sont égaux, ou si l'un commence l'autre (« huil » / « huile »). */
+/** Distance d'édition (insertion, suppression, substitution) entre deux mots courts. */
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      current.push(Math.min((previous[j] ?? 0) + 1, (current[j - 1] ?? 0) + 1, (previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1)));
+    }
+    previous = current;
+  }
+  return previous[b.length] ?? Math.max(a.length, b.length);
+}
+
+/**
+ * Deux mots correspondent s'ils sont égaux, si l'un commence l'autre (« huil » / « huile »),
+ * ou à une faute de frappe près (« kirarro » / « kiraro » ; deux fautes à partir de 8 lettres).
+ */
 function tokensMatch(a: string, b: string): boolean {
   if (a === b) {
     return true;
   }
   const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
-  return shorter.length >= 4 && longer.startsWith(shorter);
+  if (shorter.length >= 4 && longer.startsWith(shorter)) {
+    return true;
+  }
+  if (/\d/.test(a) || /\d/.test(b) || shorter.length < 5) {
+    return false;
+  }
+  return editDistance(a, b) <= (shorter.length >= 8 ? 2 : 1);
+}
+
+/** Nom attaché (« tshirt ») : égalité ou faute de frappe, jamais un simple début (« coca » ≠ « cocacola33cl »). */
+function compactMatch(word: string, compact: string): boolean {
+  if (word.length < 5) {
+    return false;
+  }
+  return word === compact || (!/\d/.test(compact) && editDistance(word, compact) <= (compact.length >= 8 ? 2 : 1));
 }
 
 /** Lit « 2 », « x2 », « 2x » (les nombres en lettres sont déjà convertis par tokensOf). */
@@ -64,6 +94,8 @@ interface ProductTokens {
   readonly product: CatalogProduct;
   readonly tokens: readonly string[];
   readonly sku: string | null;
+  /** Nom en un seul mot (« T-shirt » → « tshirt ») : le client l'écrit souvent attaché. */
+  readonly compact: string | null;
 }
 
 function indexCatalog(catalog: readonly CatalogProduct[]): ProductTokens[] {
@@ -71,6 +103,7 @@ function indexCatalog(catalog: readonly CatalogProduct[]): ProductTokens[] {
     product,
     tokens: tokensOf(product.name).filter((token) => !STOP_WORDS.has(token)),
     sku: product.sku === null ? null : normalizeText(product.sku).replace(/ /g, ''),
+    compact: normalizeText(product.name).includes(' ') ? normalizeText(product.name).replace(/ /g, '') : null,
   }));
 }
 
@@ -82,6 +115,11 @@ function score(entry: ProductTokens, words: readonly string[]): { value: number;
   const used = new Set<string>();
   if (entry.sku !== null && entry.sku.length >= 3 && words.includes(entry.sku)) {
     used.add(entry.sku);
+    return { value: 1, used };
+  }
+  const compactWord = entry.compact === null ? undefined : words.find((word) => compactMatch(word, entry.compact ?? ''));
+  if (compactWord !== undefined) {
+    used.add(compactWord);
     return { value: 1, used };
   }
   let matched = 0;

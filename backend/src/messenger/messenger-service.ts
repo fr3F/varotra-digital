@@ -13,6 +13,9 @@ interface Logger {
   error(message: string): void;
 }
 
+/** Un panier sans nouvelles depuis 24 h est oublié : le client repart d'une conversation neuve. */
+const STALE_CART_MS = 24 * 60 * 60 * 1000;
+
 /** Produits mis en avant (⭐) : les plus commandés sur Messenger ces 30 derniers jours. */
 export const POPULAR_COUNT = 3;
 const POPULARITY_DAYS = 30;
@@ -44,7 +47,9 @@ export function createMessengerService(deps: {
       try {
         const existing = await repos.conversations.find(event.psid);
         const customerName = existing?.customerName ?? (await client.getCustomerName(event.psid));
-        const state = existing?.state ?? INITIAL_CONVERSATION;
+        const stale =
+          existing?.lastCustomerMessageAt != null && event.timestamp - Date.parse(existing.lastCustomerMessageAt) > STALE_CART_MS;
+        const state = existing === null ? INITIAL_CONVERSATION : stale ? { ...INITIAL_CONVERSATION, lang: existing.state.lang } : existing.state;
         const lastCustomerMessageAt = new Date(event.timestamp).toISOString();
 
         // « Statut ? », « ma commande » : où en est la dernière commande (hors panier en cours).
@@ -68,6 +73,8 @@ export function createMessengerService(deps: {
           catalog: await repos.catalog.findAll(),
           customerName,
           popularIds: await repos.drafts.popularProductIds(popularitySince(), POPULAR_COUNT),
+          lastOrderItems: latest?.items ?? [],
+          customerProductIds: await repos.drafts.productIdsOrderedBy(event.psid),
         });
         await repos.conversations.save({ psid: event.psid, customerName, state: result.state, lastCustomerMessageAt });
 
