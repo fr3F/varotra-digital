@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
-import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { colors, fontSize, radius, shadow, spacing } from '@/core/theme/theme';
 import { ORDER_STATUS_LABELS, ORDER_STATUSES, OrderStatus, OrderSummary } from '@/models';
 import { orderService } from '@/services/order.service';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
+import { SearchField } from '@/shared/components/SearchField';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
@@ -22,18 +24,20 @@ function OrderRow({ summary }: { readonly summary: OrderSummary }) {
     >
       <View style={styles.rowMain}>
         <View style={styles.rowTop}>
-          <Text style={styles.reference}>{order.reference}</Text>
-          <OrderStatusBadge status={order.status} />
+          <Text style={styles.client} numberOfLines={1}>
+            {clientName ?? 'Client non renseigné'}
+          </Text>
+          <Text style={styles.total}>{formatMoney(order.totalAmount)}</Text>
         </View>
-        <MessengerBadges order={order} />
-        <Text style={styles.client} numberOfLines={1}>
-          {clientName ?? 'Client non renseigné'}
-        </Text>
+        <View style={styles.rowTop}>
+          <OrderStatusBadge status={order.status} />
+          <MessengerBadges order={order} />
+        </View>
         <Text style={styles.meta}>
-          {formatDisplayDateTime(order.orderedAt)} · {itemCount} produit(s)
+          {order.reference} · {formatDisplayDateTime(order.orderedAt)} · {itemCount} produit(s)
         </Text>
       </View>
-      <Text style={styles.total}>{formatMoney(order.totalAmount)}</Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </Pressable>
   );
 }
@@ -66,15 +70,7 @@ export function OrderListScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'Commandes' }} />
       <View style={styles.toolbar}>
-        <TextInput
-          accessibilityLabel="Rechercher une commande"
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Rechercher (référence, client)"
-          placeholderTextColor={colors.textMuted}
-          style={styles.search}
-          autoCorrect={false}
-        />
+        <SearchField accessibilityLabel="Rechercher une commande" value={search} onChangeText={setSearch} placeholder="Rechercher (référence, client)" />
         <ChipGroup accessibilityLabel="Filtrer par statut" options={statusOptions} selected={status} onSelect={setStatus} />
         <ErrorBanner message={error} />
       </View>
@@ -91,6 +87,7 @@ export function OrderListScreen() {
           contentContainerStyle={orders.length === 0 ? styles.emptyList : undefined}
           ListEmptyComponent={
             <EmptyState
+              icon="receipt-outline"
               title={isFiltered ? 'Aucune commande trouvée' : 'Aucune commande'}
               message={isFiltered ? undefined : 'Les commandes reçues sur Messenger apparaissent ici automatiquement.'}
             />
@@ -105,32 +102,22 @@ export function OrderListScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   toolbar: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
-  search: {
-    minHeight: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
   emptyList: { flexGrow: 1 },
   row: {
+    ...shadow,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
     backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
-  rowPressed: { backgroundColor: colors.background },
-  rowMain: { flex: 1, gap: 2 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  reference: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
-  client: { fontSize: fontSize.md, color: colors.text },
+  rowPressed: { opacity: 0.85 },
+  rowMain: { flex: 1, gap: spacing.xs + 2 },
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, flexWrap: 'wrap' },
+  client: { flex: 1, fontSize: fontSize.md, fontWeight: '700', color: colors.text },
   meta: { fontSize: fontSize.sm, color: colors.textMuted },
-  total: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  total: { fontSize: fontSize.md, fontWeight: '800', color: colors.primary, fontVariant: ['tabular-nums'] },
 });

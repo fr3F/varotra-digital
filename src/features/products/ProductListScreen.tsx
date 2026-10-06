@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack } from 'expo-router';
 import { NEW_ENTITY_ID } from '@/core/constants/app.constants';
@@ -7,6 +7,7 @@ import { colors, fontSize, radius, shadow, spacing } from '@/core/theme/theme';
 import { isLowStock, Product } from '@/models';
 import { AppButton } from '@/shared/components/AppButton';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
+import { SearchField } from '@/shared/components/SearchField';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { formatMoney } from '@/utils/money.utils';
 import { Thumbnail } from '@/shared/components/Thumbnail';
@@ -65,15 +66,7 @@ export function ProductListScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'Produits' }} />
       <View style={styles.toolbar}>
-        <TextInput
-          accessibilityLabel="Rechercher un produit"
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Rechercher (nom, référence, catégorie)"
-          placeholderTextColor={colors.textMuted}
-          style={styles.search}
-          autoCorrect={false}
-        />
+        <SearchField accessibilityLabel="Rechercher un produit" value={search} onChangeText={setSearch} placeholder="Rechercher (nom, référence, catégorie)" />
         {categories.length > 0 ? (
           <ChipGroup
             accessibilityLabel="Filtrer par catégorie"
@@ -106,6 +99,7 @@ export function ProductListScreen() {
           contentContainerStyle={products.length === 0 ? styles.emptyList : styles.grid}
           ListEmptyComponent={
             <EmptyState
+              icon={isFiltered ? 'search-outline' : 'cube-outline'}
               title={isFiltered ? 'Aucun résultat' : 'Aucun produit'}
               message={isFiltered ? 'Essayez un autre mot ou une autre catégorie.' : 'Ajoutez votre premier produit pour commencer.'}
             />
@@ -123,14 +117,6 @@ export function ProductListScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   toolbar: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
-  search: {
-    minHeight: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.field,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
   summary: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   count: { color: colors.textMuted, fontSize: fontSize.sm },
   warning: { color: colors.warning, fontSize: fontSize.sm, fontWeight: '600' },

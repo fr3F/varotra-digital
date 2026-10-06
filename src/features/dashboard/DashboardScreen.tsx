@@ -1,3 +1,5 @@
+import type { ComponentProps } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Href, router, Stack, useFocusEffect } from 'expo-router';
@@ -23,15 +25,17 @@ import { formatMoney } from '@/utils/money.utils';
 interface ModuleTile {
   readonly label: string;
   readonly href: Href;
+  readonly icon: ComponentProps<typeof Ionicons>['name'];
 }
 
+/** Accès rapides (les écrans principaux sont aussi dans la barre d'onglets). */
 const MODULES: readonly ModuleTile[] = [
-  { label: 'Ventes', href: '/sales' },
-  { label: 'Commandes', href: '/orders' },
-  { label: 'Produits', href: '/products' },
-  { label: 'Stock', href: '/stock' },
-  { label: 'Clients', href: '/clients' },
-  { label: 'Dépenses', href: '/expenses' },
+  { label: 'Stock', href: '/stock', icon: 'layers-outline' },
+  { label: 'Clients', href: '/clients', icon: 'people-outline' },
+  { label: 'Dépenses', href: '/expenses', icon: 'wallet-outline' },
+  { label: 'Ventes', href: '/sales', icon: 'cash-outline' },
+  { label: 'Commandes', href: '/orders', icon: 'receipt-outline' },
+  { label: 'Produits', href: '/products', icon: 'cube-outline' },
 ];
 
 const PERIOD_OPTIONS: readonly ChipOption<Period>[] = PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }));
@@ -195,7 +199,7 @@ export function DashboardScreen() {
             )}
           </View>
 
-          <Text style={styles.sectionTitle}>Modules</Text>
+          <Text style={styles.sectionTitle}>Accès rapide</Text>
           <View style={styles.grid}>
             {MODULES.map((module) => (
               <Pressable
@@ -204,6 +208,9 @@ export function DashboardScreen() {
                 onPress={() => router.push(module.href)}
                 style={({ pressed }) => [styles.tile, { flexBasis: width >= WIDE_LAYOUT ? '15%' : '30%' }, pressed && styles.tilePressed]}
               >
+                <View style={styles.tileIcon}>
+                  <Ionicons name={module.icon} size={24} color={colors.primary} />
+                </View>
                 <Text style={styles.tileLabel}>{module.label}</Text>
               </Pressable>
             ))}
@@ -257,5 +264,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
   },
   tilePressed: { opacity: 0.8 },
-  tileLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.primaryDark },
+  tileIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  tileLabel: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
 });

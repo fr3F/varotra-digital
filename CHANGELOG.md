@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 ## [Unreleased]
 
 ### Modifié
+- Interface plus claire : texte plus grand (corps 16) et mieux contrasté, fond blanc, listes en cartes avec flèche, champs de formulaire gris clair avec bordure rouge à la saisie, recherche avec loupe et bouton effacer, statuts de commande avec icône, écrans vides illustrés, accès rapides à icônes sur l'accueil.
 - Écran de démarrage : logo « Carnet Digital » blanc sur fond rouge (écran natif dans l'APK et écran d'ouverture dans l'application, visible aussi dans Expo Go).
 - Nouvelle interface « Bite » : rouge bordeaux, en-têtes blancs, boutons et puces en pilule, cartes à ombre douce, barre d'onglets rouge (Accueil, Commandes avec pastille des nouvelles, Produits, Ventes, Réglages), produits en grille de cartes avec photo.
 - Commandes : l'application ne crée plus de commandes, elle en assure le suivi. Les commandes arrivent par Messenger ; on peut les corriger, les valider, les livrer ou les annuler. Boutons « + Nouvelle commande » retirés (liste, tableau de bord, fiche client).

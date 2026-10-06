@@ -8,12 +8,14 @@ export const colors = {
   /** Accent jaune (bandeaux, promotions). */
   accent: '#FFB01F',
   accentLight: '#FFF4DE',
-  background: '#F6F6F6',
+  /** Fond blanc comme le modèle : cartes détachées par leur ombre, champs en gris clair. */
+  background: '#FFFFFF',
   surface: '#FFFFFF',
   /** Champs de saisie et puces non sélectionnées (gris clair du modèle). */
   field: '#F1F1F3',
   text: '#1C1C1E',
-  textMuted: '#7A7A80',
+  /** Texte secondaire : contraste ≥ 4.5:1 sur blanc et sur le fond gris (lisible en plein soleil). */
+  textMuted: '#5C5C63',
   border: '#ECECEE',
   danger: '#C2410C',
   dangerLight: '#FFEDD5',
@@ -54,10 +56,11 @@ export const radius = {
   pill: 999,
 } as const;
 
+/** Échelle typographique (corps 16 : lecture confortable sur téléphone). */
 export const fontSize = {
-  sm: 13,
-  md: 15,
-  lg: 18,
-  xl: 22,
-  xxl: 28,
+  sm: 14,
+  md: 16,
+  lg: 19,
+  xl: 24,
+  xxl: 30,
 } as const;

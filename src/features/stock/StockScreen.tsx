@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router, Stack } from 'expo-router';
-import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
+import { colors, radius, spacing } from '@/core/theme/theme';
 import { Product, StockLevel, stockLevelOf, StockMovementType, summarizeStock } from '@/models';
 import { productStore } from '@/services/product.service';
 import { stockMovementService } from '@/services/stock-movement.service';
@@ -10,6 +10,7 @@ import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
 import { ListRow } from '@/shared/components/ListRow';
 import { Thumbnail } from '@/shared/components/Thumbnail';
 import { StatCard } from '@/shared/components/StatCard';
+import { SearchField } from '@/shared/components/SearchField';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { formatMoney } from '@/utils/money.utils';
 import { useProducts } from '../products/useProducts';
@@ -103,15 +104,7 @@ function ProductsTab() {
         <StatCard label="Stock bas" value={String(summary.lowStockCount)} tone={summary.lowStockCount > 0 ? 'warning' : 'default'} />
         <StatCard label="Ruptures" value={String(summary.outOfStockCount)} tone={summary.outOfStockCount > 0 ? 'negative' : 'default'} />
       </View>
-      <TextInput
-        accessibilityLabel="Rechercher dans le stock"
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Rechercher un produit"
-        placeholderTextColor={colors.textMuted}
-        style={styles.search}
-        autoCorrect={false}
-      />
+      <SearchField accessibilityLabel="Rechercher dans le stock" value={search} onChangeText={setSearch} placeholder="Rechercher un produit" />
       <ChipGroup accessibilityLabel="Filtrer par niveau de stock" options={LEVEL_OPTIONS} selected={level} onSelect={setLevel} />
       <ErrorBanner message={error} />
     </View>
@@ -193,16 +186,6 @@ const styles = StyleSheet.create({
   },
   header: { padding: spacing.lg, gap: spacing.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  search: {
-    minHeight: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
   qtyBadge: {
     minWidth: 44,
     paddingHorizontal: spacing.sm,
