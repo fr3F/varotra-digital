@@ -5,7 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 ## [Unreleased]
 
 ### Ajouté
-- Accueil : graphique du chiffre d'affaires filtrable par jours (7), semaines (8), mois (12) ou années (5).
+- Accueil : graphique du chiffre d'affaires filtrable — découpage Jours / Semaines / Mois / Années et nombre de périodes saisi librement (champ avec − / +, jusqu'à 90 jours, 52 semaines, 24 mois, 10 ans).
 - Application en malgache, français et anglais : bouton langue (drapeaux 🇲🇬 🇫🇷 🇬🇧) en haut de chaque écran et Réglages › Langue ; langue du téléphone par défaut, choix enregistré.
 
 ### Modifié

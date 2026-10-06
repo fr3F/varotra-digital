@@ -11,6 +11,7 @@ import {
   Period,
   periodStart,
   REVENUE_BUCKET_COUNTS,
+  REVENUE_COUNT_LIMITS,
   RevenueGranularity,
 } from '@/models';
 
@@ -78,15 +79,16 @@ export const dashboardService = {
 
   /**
    * Chiffre d'affaires et bénéfice par intervalle (le plus ancien d'abord), jusqu'à l'intervalle
-   * en cours inclus : `count` jours, semaines, mois ou années (1 à 60).
+   * en cours inclus : `count` jours, semaines, mois ou années (dans les limites du découpage).
    */
   revenueSeries(
     granularity: RevenueGranularity,
     count: number = REVENUE_BUCKET_COUNTS[granularity],
     reference: Date = new Date(),
   ): Promise<DailyRevenue[]> {
-    if (!Number.isSafeInteger(count) || count < 1 || count > 60) {
-      throw new ValidationError('Nombre de périodes invalide (1 à 60).');
+    const limits = REVENUE_COUNT_LIMITS[granularity];
+    if (!Number.isSafeInteger(count) || count < limits.min || count > limits.max) {
+      throw new ValidationError(`Nombre de périodes invalide (${limits.min} à ${limits.max}).`);
     }
     const starts = Array.from({ length: count }, (_, index) =>
       bucketStart(granularity, reference, index - (count - 1)).toISOString(),

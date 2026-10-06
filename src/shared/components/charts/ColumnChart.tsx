@@ -35,7 +35,9 @@ const SPARSE_LABEL_WIDTH = 48;
  * toucher une colonne la sélectionne (équivalent mobile du survol).
  */
 export function ColumnChart({ data, formatValue, height = 140, initialKey }: ColumnChartProps) {
-  const [selectedKey, setSelectedKey] = useState(initialKey ?? data[data.length - 1]?.key ?? null);
+  const [chosenKey, setSelectedKey] = useState(initialKey ?? null);
+  // Sans choix (ou choix absent des données, ex. données chargées après coup) : la colonne la plus récente.
+  const selectedKey = data.some((datum) => datum.key === chosenKey) ? chosenKey : (data[data.length - 1]?.key ?? null);
   const max = Math.max(...data.map((datum) => datum.value), 0);
   const selected = data.find((datum) => datum.key === selectedKey) ?? null;
   // Beaucoup de barres (ex. 30 jours) : une étiquette sur N pour qu'elles restent lisibles.

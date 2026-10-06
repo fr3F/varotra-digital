@@ -13,7 +13,7 @@ import {
   Period,
   PERIODS,
   REVENUE_BUCKET_COUNTS,
-  REVENUE_COUNT_OPTIONS,
+  REVENUE_COUNT_LIMITS,
   REVENUE_GRANULARITIES,
   RevenueGranularity,
 } from '@/models';
@@ -26,6 +26,8 @@ import { AppButton } from '@/shared/components/AppButton';
 import { BarList } from '@/shared/components/charts/BarList';
 import { ColumnChart } from '@/shared/components/charts/ColumnChart';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
+import { NumberStepper } from '@/shared/components/NumberStepper';
+import { SegmentedControl, SegmentOption } from '@/shared/components/SegmentedControl';
 import { StatCard } from '@/shared/components/StatCard';
 import { ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { useQuery } from '@/shared/hooks/useQuery';
@@ -82,12 +84,9 @@ export function DashboardScreen() {
   const [counts, setCounts] = useState<Readonly<Record<RevenueGranularity, number>>>(REVENUE_BUCKET_COUNTS);
   const count = counts[granularity];
   const fetchSeries = useCallback(() => dashboardService.revenueSeries(granularity, count), [granularity, count]);
-  const countOptions = useMemo<readonly ChipOption<number>[]>(
-    () => REVENUE_COUNT_OPTIONS[granularity].map((value) => ({ value, label: String(value) })),
-    [granularity],
-  );
   const { data: series } = useQuery(fetchSeries, version);
-  const granularityOptions = useMemo<readonly ChipOption<RevenueGranularity>[]>(
+  const limits = REVENUE_COUNT_LIMITS[granularity];
+  const granularityOptions = useMemo<readonly SegmentOption<RevenueGranularity>[]>(
     () => REVENUE_GRANULARITIES.map((value) => ({ value, label: t.granularity[value] })),
     [t],
   );
@@ -114,7 +113,8 @@ export function DashboardScreen() {
         case 'DAY':
           return count > 7 ? String(date.getDate()) : `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()}`;
         case 'WEEK':
-          return count > 8 ? dayMonth : t.weekStart(dayMonth);
+          // Axe : date courte du lundi ; « sem. 05/10 » complet au-dessus du graphique.
+          return dayMonth;
         case 'MONTH':
           return t.monthsShort[date.getMonth()] ?? '';
         case 'YEAR':
@@ -217,18 +217,28 @@ export function DashboardScreen() {
             <Text style={styles.cardTitle}>
               {t.revenueChart} · {t.granularityRange[granularity](count)}
             </Text>
-            <ChipGroup
-              accessibilityLabel={t.revenueChart}
-              options={granularityOptions}
-              selected={granularity}
-              onSelect={setGranularity}
-            />
-            <ChipGroup
-              accessibilityLabel={t.countLabel}
-              options={countOptions}
-              selected={count}
-              onSelect={(value) => setCounts((previous) => ({ ...previous, [granularity]: value }))}
-            />
+            {/* Filtre : découpage (segments), puis nombre de périodes (champ libre avec − / +). */}
+            <View style={styles.filter}>
+              <SegmentedControl
+                accessibilityLabel={t.revenueChart}
+                options={granularityOptions}
+                selected={granularity}
+                onSelect={setGranularity}
+              />
+              <View style={styles.countRow}>
+                <Text style={styles.countText}>{t.show}</Text>
+                <NumberStepper
+                  value={count}
+                  min={limits.min}
+                  max={limits.max}
+                  onChange={(value) => setCounts((previous) => ({ ...previous, [granularity]: value }))}
+                  accessibilityLabel={`${t.countLabel} (${t.range(limits.min, limits.max)})`}
+                  decrementLabel={t.fewer}
+                  incrementLabel={t.more}
+                />
+                <Text style={styles.countText}>{t.units[granularity]}</Text>
+              </View>
+            </View>
             {/* key : le graphique repart sur la barre la plus récente à chaque changement de découpage. */}
             <ColumnChart key={`${granularity}-${count}`} data={chartData} formatValue={formatMoney} />
           </View>
@@ -297,6 +307,9 @@ export function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
+  filter: { gap: spacing.md, marginTop: spacing.sm, marginBottom: spacing.md },
+  countRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  countText: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
   contentWide: { maxWidth: 1100, width: '100%', alignSelf: 'center' },
