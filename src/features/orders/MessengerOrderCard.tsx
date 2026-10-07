@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { useMessages } from '@/core/i18n/i18n';
@@ -6,6 +6,10 @@ import { useStore } from '@/core/state/store';
 import { Order } from '@/models';
 import { messengerOutboxVersion, messengerStore } from '@/services/messenger/messenger-state';
 import { facebookReplyService } from '@/services/messenger/facebook-reply.service';
+import { AppButton } from '@/shared/components/AppButton';
+import { FormField } from '@/shared/components/FormField';
+import { ErrorBanner } from '@/shared/components/StatusViews';
+import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
 import { useQuery } from '@/shared/hooks/useQuery';
 import { ReplyRow } from '../messenger/ReplyRow';
 import { MessengerBadges } from './MessengerBadges';
@@ -17,6 +21,14 @@ export function MessengerOrderCard({ order }: { readonly order: Order }) {
   const version = useStore(messengerOutboxVersion) + useStore(messengerStore).syncCount;
   const fetchReplies = useCallback(() => facebookReplyService.history(order.id), [order.id]);
   const { data: replies } = useQuery(fetchReplies, version);
+  const [message, setMessage] = useState('');
+  const { busy, error, run } = useAsyncAction();
+
+  const send = () =>
+    run(async () => {
+      await facebookReplyService.sendMessage(order, message);
+      setMessage('');
+    });
 
   if (order.source !== 'MESSENGER') {
     return null;
@@ -38,6 +50,21 @@ export function MessengerOrderCard({ order }: { readonly order: Order }) {
           <Text style={styles.quote}>« {order.customerMessage} »</Text>
         </>
       ) : null}
+      <ErrorBanner message={error} />
+      <FormField
+        label={t.writeToCustomer}
+        value={message}
+        onChangeText={setMessage}
+        placeholder={t.messagePlaceholder}
+        hint={t.writeToCustomerHint}
+        multiline
+      />
+      <AppButton
+        label={t.sendMessage}
+        onPress={() => void send()}
+        loading={busy}
+        disabled={message.trim().length === 0}
+      />
       {replies !== null && replies.length > 0 ? (
         <>
           <Text style={styles.label}>{t.facebookReplies}</Text>

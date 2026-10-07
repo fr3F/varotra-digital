@@ -24,6 +24,8 @@ export interface PendingReply {
   readonly externalRef: string;
   readonly kind: CustomerReplyKind;
   readonly unavailable: readonly UnavailableItem[];
+  /** Texte du vendeur à envoyer tel quel (MANUAL). */
+  readonly messageText: string | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,12 +70,14 @@ export const messengerReplyRepository = {
       readonly kind: CustomerReplyKind;
       readonly automatic: boolean;
       readonly unavailable?: readonly UnavailableItem[];
+      /** Message écrit par le vendeur (MANUAL), gardé dès la mise en file. */
+      readonly messageText?: string;
     },
     executor: SqlExecutor = database,
   ): Promise<void> {
     await executor.run(
-      `INSERT INTO messenger_replies (id, order_id, external_ref, kind, automatic, details_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO messenger_replies (id, order_id, external_ref, kind, automatic, details_json, message_text, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         generateId(),
         input.orderId,
@@ -83,6 +87,7 @@ export const messengerReplyRepository = {
         input.unavailable === undefined || input.unavailable.length === 0
           ? null
           : JSON.stringify({ unavailable: input.unavailable }),
+        input.messageText ?? null,
         nowIso(),
       ],
     );
@@ -97,12 +102,14 @@ export const messengerReplyRepository = {
       externalRef: readString(row, 'external_ref'),
       kind: readEnum(row, 'kind', CUSTOMER_REPLY_KINDS),
       unavailable: parseUnavailable(readNullableString(row, 'details_json')),
+      messageText: readNullableString(row, 'message_text'),
     }));
   },
 
   async markProcessed(id: string, result: CustomerReplyResult, messageText: string | null): Promise<void> {
     await database.run(
-      `UPDATE messenger_replies SET processed_at = ?, result = ?, message_text = ?, attempts = attempts + 1 WHERE id = ?`,
+      `UPDATE messenger_replies SET processed_at = ?, result = ?, message_text = COALESCE(?, message_text),
+         attempts = attempts + 1 WHERE id = ?`,
       [nowIso(), result, messageText, id],
     );
   },

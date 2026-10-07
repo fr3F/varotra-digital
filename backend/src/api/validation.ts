@@ -88,6 +88,11 @@ export function parseAck(body: unknown): string[] {
   return ids.map((id: unknown, index) => text(id, `ids[${index}]`, 100));
 }
 
+/** Message écrit par le vendeur (Messenger refuse les textes de plus de 2 000 caractères). */
+export function parseManualMessage(body: unknown): string {
+  return text(record(body)['text'], 'text', 2000);
+}
+
 /** Événement à signaler au client, avec le détail des produits indisponibles le cas échéant. */
 export function parseNotifyRequest(body: unknown): { event: NotificationEvent; details: NotificationDetails } {
   const value = record(body);

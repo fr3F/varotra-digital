@@ -31,9 +31,10 @@ export interface RemoteOrder {
 
 /**
  * Réponses Facebook envoyées au client. CONFIRMED / UNAVAILABLE servent à la réponse automatique
- * après vérification du stock ; les autres suivent les changements de statut faits par le vendeur.
+ * après vérification du stock ; les autres suivent les changements de statut faits par le vendeur ;
+ * MANUAL est un message écrit par le vendeur dans l'application.
  */
-export const CUSTOMER_REPLY_KINDS = ['CONFIRMED', 'UNAVAILABLE', 'PREPARING', 'DELIVERED', 'CANCELLED'] as const;
+export const CUSTOMER_REPLY_KINDS = ['CONFIRMED', 'UNAVAILABLE', 'PREPARING', 'DELIVERED', 'CANCELLED', 'MANUAL'] as const;
 export type CustomerReplyKind = (typeof CUSTOMER_REPLY_KINDS)[number];
 
 export const CUSTOMER_REPLY_LABELS: Readonly<Record<CustomerReplyKind, string>> = {
@@ -42,6 +43,7 @@ export const CUSTOMER_REPLY_LABELS: Readonly<Record<CustomerReplyKind, string>> 
   PREPARING: 'En préparation',
   DELIVERED: 'Livrée',
   CANCELLED: 'Annulée',
+  MANUAL: 'Message du vendeur',
 };
 
 /** Produit en quantité insuffisante, détaillé dans la réponse « Produit indisponible actuellement. ». */
