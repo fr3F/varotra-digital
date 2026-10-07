@@ -48,7 +48,7 @@ const config: AppConfig = {
   port: 0,
   host: '127.0.0.1',
   databasePath: ':memory:',
-  meta: { appSecret: 'secret-de-test', verifyToken: 'jeton-verif', pageAccessToken: null, graphApiVersion: 'v25.0' },
+  meta: { appSecret: 'secret-de-test', verifyToken: 'jeton-verif', pageAccessToken: null, graphApiVersion: 'v25.0', buttonStyle: 'template' },
   pairingCode: 'CODE-1234',
   corsOrigins: ['http://localhost:8081'],
   legal: { businessName: 'Boutique <Rasoa>', contactEmail: 'contact@exemple.mg' },

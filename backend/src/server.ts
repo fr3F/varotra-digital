@@ -16,7 +16,9 @@ function main(): void {
   const messengerClient =
     config.meta.pageAccessToken === null
       ? createSimulatedMessengerClient()
-      : createGraphMessengerClient(config.meta.pageAccessToken, config.meta.graphApiVersion);
+      : createGraphMessengerClient(config.meta.pageAccessToken, config.meta.graphApiVersion, {
+          buttonStyle: config.meta.buttonStyle,
+        });
   const queue = createTaskQueue();
   const log = (level: string) => (message: string) => console.log(`[${new Date().toISOString()}] ${level} ${message}`);
 
