@@ -105,13 +105,10 @@ async function flushReplies(baseUrl: string, token: string): Promise<number> {
   let sent = 0;
   for (const entry of await messengerReplyRepository.findPending()) {
     try {
-      const { result, text } = await messengerApi.notifyCustomer(
-        baseUrl,
-        token,
-        entry.externalRef,
-        entry.kind,
-        entry.unavailable,
-      );
+      const { result, text } =
+        entry.kind === 'MANUAL'
+          ? await messengerApi.sendMessage(baseUrl, token, entry.externalRef, entry.messageText ?? '')
+          : await messengerApi.notifyCustomer(baseUrl, token, entry.externalRef, entry.kind, entry.unavailable);
       await messengerReplyRepository.markProcessed(entry.id, result, text);
       sent += result === 'DELIVERED' ? 1 : 0;
     } catch (error: unknown) {

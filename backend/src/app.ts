@@ -5,6 +5,7 @@ import {
   BadRequestError,
   parseAck,
   parseCatalog,
+  parseManualMessage,
   parseNotifyRequest,
   parsePairRequest,
   parseSettings,
@@ -249,6 +250,12 @@ export function buildApp(deps: AppDeps): CarnetApp {
   app.post('/v1/orders/:id/notify', async (c) => {
     const { event, details } = parseNotifyRequest(await jsonBody(c));
     return c.json(await notifications.notify(c.req.param('id'), event, details));
+  });
+
+  /** Message écrit par le vendeur dans l'application, envoyé au client de la commande. */
+  app.post('/v1/orders/:id/message', async (c) => {
+    const text = parseManualMessage(await jsonBody(c));
+    return c.json(await notifications.sendManual(c.req.param('id'), text));
   });
 
   /** Historique des réponses envoyées au client pour cette commande, et statut qu'il voit. */

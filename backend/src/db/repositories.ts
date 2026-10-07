@@ -143,7 +143,7 @@ function toDelivery(row: Row): DeliveryInfo | null {
   };
 }
 
-const MESSAGE_KINDS: readonly MessageKind[] = ['CONVERSATION', 'RECEIPT', 'STATUS_REPLY', ...NOTIFICATION_EVENTS];
+const MESSAGE_KINDS: readonly MessageKind[] = ['CONVERSATION', 'RECEIPT', 'STATUS_REPLY', 'MANUAL', ...NOTIFICATION_EVENTS];
 const DELIVERY_STATUSES: readonly DeliveryStatus[] = ['SENT', 'SIMULATED', 'FAILED', 'OUTSIDE_WINDOW'];
 
 function toReply(row: Row): ReplyRecord {

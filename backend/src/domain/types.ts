@@ -109,7 +109,8 @@ export interface UnavailableItem {
 }
 
 /** Nature d'un message envoyé au client (historique des réponses). */
-export type MessageKind = 'CONVERSATION' | 'RECEIPT' | 'STATUS_REPLY' | NotificationEvent;
+/** MANUAL : message écrit par le vendeur dans l'application. */
+export type MessageKind = 'CONVERSATION' | 'RECEIPT' | 'STATUS_REPLY' | 'MANUAL' | NotificationEvent;
 
 export type DeliveryStatus = 'SENT' | 'SIMULATED' | 'FAILED' | 'OUTSIDE_WINDOW';
 

@@ -94,6 +94,7 @@ export const commonMessages = defineMessages<CommonMessages>(
       PREPARING: 'En préparation',
       DELIVERED: 'Livrée',
       CANCELLED: 'Annulée',
+      MANUAL: 'Message du vendeur',
     },
     customerReplyResult: {
       DELIVERED: 'Envoyée sur Messenger',
@@ -149,6 +150,7 @@ export const commonMessages = defineMessages<CommonMessages>(
         PREPARING: 'Eo am-panomanana',
         DELIVERED: 'Tonga',
         CANCELLED: 'Nofoanana',
+        MANUAL: 'Hafatry ny mpivarotra',
       },
       customerReplyResult: {
         DELIVERED: 'Lasa tamin’ny Messenger',
@@ -203,6 +205,7 @@ export const commonMessages = defineMessages<CommonMessages>(
         PREPARING: 'Being prepared',
         DELIVERED: 'Delivered',
         CANCELLED: 'Cancelled',
+        MANUAL: 'Message from the seller',
       },
       customerReplyResult: {
         DELIVERED: 'Sent on Messenger',
