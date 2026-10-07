@@ -12,8 +12,10 @@
     "start": "node --env-file-if-exists=.env src/server.ts",
     "worker:dev": "wrangler dev",
     "cloudflare:deploy": "node scripts/cloudflare-deploy.ts",
+    "deploy": "wrangler deploy",
     "simulate": "node --env-file-if-exists=.env scripts/simulate.ts",
     "test": "node --test --test-reporter=spec \"test/**/*.test.ts\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-functions=90 --test-coverage-branches=75 --test-coverage-exclude=\"test/**\" \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

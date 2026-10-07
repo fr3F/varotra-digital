@@ -1,15 +1,25 @@
 import { timingSafeEqual } from 'node:crypto';
 import { type Context, Hono } from 'hono';
 import { dataDeletionHtml, privacyPolicyHtml } from './api/legal-pages.ts';
-import { BadRequestError, parseAck, parseCatalog, parseNotifyRequest, parsePairRequest } from './api/validation.ts';
+import {
+  BadRequestError,
+  parseAck,
+  parseCatalog,
+  parseNotifyRequest,
+  parsePairRequest,
+  parsePushTokenRequest,
+} from './api/validation.ts';
 import type { AppConfig } from './config.ts';
 import type { Repositories } from './db/repositories.ts';
 import type { OrderDraft } from './domain/types.ts';
+import { createCartReminderService } from './messenger/cart-reminder.service.ts';
 import { createFacebookNotificationService } from './messenger/facebook-notification.service.ts';
 import type { MessengerClient } from './messenger/messenger-client.ts';
 import { createMessengerService } from './messenger/messenger-service.ts';
 import { isValidSignature } from './messenger/signature.ts';
 import { parseWebhookBody } from './messenger/webhook-events.ts';
+import { createOrderPushService } from './push/order-push.service.ts';
+import { createExpoPushClient, type PushClient } from './push/push-client.ts';
 
 const API_VERSION = '1';
 const PAIRING_MAX_FAILURES = 5;
@@ -26,6 +36,8 @@ export interface AppDeps {
   readonly config: AppConfig;
   readonly repos: Repositories;
   readonly messengerClient: MessengerClient;
+  /** Notifications push vers le téléphone du vendeur (Expo Push par défaut). */
+  readonly pushClient?: PushClient;
   /**
    * Lance un traitement après la réponse HTTP (Meta exige une réponse en moins de 5 s) :
    * `waitUntil` sur Cloudflare Workers, file d'attente sur Node et dans les tests.
@@ -72,11 +84,28 @@ function clientIp(c: Context): string {
 /** Application HTTP (Node ou Cloudflare Workers). */
 export type CarnetApp = Hono<Env>;
 
+/** Tâches périodiques (cron Cloudflare toutes les 30 min, minuteur sur Node). */
+export function createScheduledJobs(deps: AppDeps) {
+  const logger: Logger = deps.logger ?? { info: () => undefined, error: (message) => console.error(message) };
+  const notifications = createFacebookNotificationService({ repos: deps.repos, client: deps.messengerClient, logger, now: deps.now });
+  const reminders = createCartReminderService({ repos: deps.repos, notifications, logger, now: deps.now });
+  return {
+    async run(): Promise<void> {
+      try {
+        await reminders.remindAbandonedCarts();
+      } catch (error: unknown) {
+        logger.error(`Relance des paniers impossible : ${error instanceof Error ? error.message : String(error)}`);
+      }
+    },
+  };
+}
+
 export function buildApp(deps: AppDeps): CarnetApp {
   const { config, repos } = deps;
   const logger: Logger = deps.logger ?? { info: () => undefined, error: (message) => console.error(message) };
   const notifications = createFacebookNotificationService({ repos, client: deps.messengerClient, logger, now: deps.now });
-  const service = createMessengerService({ repos, client: deps.messengerClient, notifications, logger });
+  const orderPush = createOrderPushService({ repos, push: deps.pushClient ?? createExpoPushClient(), logger });
+  const service = createMessengerService({ repos, client: deps.messengerClient, notifications, orderPush, logger });
   const pairingFailures = new Map<string, number[]>();
   const app = new Hono<Env>();
 
@@ -224,6 +253,13 @@ export function buildApp(deps: AppDeps): CarnetApp {
       customerStatus: draft.customerStatus,
       replies: replies.map(({ kind, text, status, createdAt }) => ({ kind, text, status, createdAt })),
     });
+  });
+
+  /** Enregistre (ou retire avec null) le jeton Expo Push de cet appareil. */
+  app.put('/v1/devices/push-token', async (c) => {
+    const pushToken = parsePushTokenRequest(await jsonBody(c));
+    await repos.devices.setPushToken(c.get('deviceId'), pushToken);
+    return c.json({ ok: true, push: pushToken !== null });
   });
 
   /** Déconnecte cet appareil (le jeton devient invalide). */

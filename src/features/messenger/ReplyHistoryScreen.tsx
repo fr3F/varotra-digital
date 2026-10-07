@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, Stack } from 'expo-router';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
 import { CustomerReplyEntry } from '@/models';
@@ -10,16 +11,10 @@ import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
 import { StatCard } from '@/shared/components/StatCard';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { useQuery } from '@/shared/hooks/useQuery';
+import { messengerMessages } from './messenger.messages';
 import { ReplyRow } from './ReplyRow';
 
 type ReplyFilter = 'ALL' | 'AUTO' | 'MANUAL' | 'PROBLEM';
-
-const FILTERS: readonly ChipOption<ReplyFilter>[] = [
-  { value: 'ALL', label: 'Toutes' },
-  { value: 'AUTO', label: 'Automatiques' },
-  { value: 'MANUAL', label: 'Vendeur' },
-  { value: 'PROBLEM', label: 'Non envoyées' },
-];
 
 function matches(entry: CustomerReplyEntry, filter: ReplyFilter): boolean {
   switch (filter) {
@@ -37,6 +32,16 @@ function matches(entry: CustomerReplyEntry, filter: ReplyFilter): boolean {
 /** Historique des réponses Facebook envoyées aux clients (automatiques et manuelles). */
 export function ReplyHistoryScreen() {
   const [filter, setFilter] = useState<ReplyFilter>('ALL');
+  const t = useMessages(messengerMessages);
+  const filters = useMemo<readonly ChipOption<ReplyFilter>[]>(
+    () => [
+      { value: 'ALL', label: t.filterAll },
+      { value: 'AUTO', label: t.filterAuto },
+      { value: 'MANUAL', label: t.filterManual },
+      { value: 'PROBLEM', label: t.filterProblem },
+    ],
+    [t],
+  );
   const version = useStore(messengerOutboxVersion) + useStore(messengerStore).syncCount;
   const fetchReplies = useCallback(() => facebookReplyService.recent(), []);
   const { data, loading, error, reload } = useQuery(fetchReplies, version);
@@ -53,7 +58,7 @@ export function ReplyHistoryScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Réponses Facebook' }} />
+      <Stack.Screen options={{ title: t.title }} />
       <FlatList
         data={entries}
         keyExtractor={(entry) => entry.reply.id}
@@ -62,17 +67,17 @@ export function ReplyHistoryScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.grid}>
-              <StatCard label="Confirmées auto." value={String(stats.confirmed)} tone="positive" />
+              <StatCard label={t.confirmedAuto} value={String(stats.confirmed)} tone="positive" />
               <StatCard
-                label="Indisponibles"
+                label={t.unavailable}
                 value={String(stats.unavailable)}
                 tone={stats.unavailable > 0 ? 'warning' : 'default'}
               />
             </View>
             {stats.pending > 0 ? (
-              <Text style={styles.pending}>{stats.pending} réponse(s) en attente de réseau.</Text>
+              <Text style={styles.pending}>{t.pending(stats.pending)}</Text>
             ) : null}
-            <ChipGroup accessibilityLabel="Filtrer les réponses" options={FILTERS} selected={filter} onSelect={setFilter} />
+            <ChipGroup accessibilityLabel={t.filterLabel} options={filters} selected={filter} onSelect={setFilter} />
             <ErrorBanner message={error} />
           </View>
         }
@@ -82,7 +87,7 @@ export function ReplyHistoryScreen() {
             onPress={() => router.push({ pathname: '/orders/[id]', params: { id: item.reply.orderId } })}
             style={({ pressed }) => [styles.row, pressed && styles.pressed]}
           >
-            <ReplyRow reply={item.reply} heading={`${item.orderReference} · ${item.clientName ?? 'Client Messenger'}`} />
+            <ReplyRow reply={item.reply} heading={`${item.orderReference} · ${item.clientName ?? t.messengerClient}`} />
           </Pressable>
         )}
         ListEmptyComponent={
@@ -90,8 +95,8 @@ export function ReplyHistoryScreen() {
             <LoadingView />
           ) : (
             <EmptyState
-              title="Aucune réponse"
-              message="Les réponses envoyées aux clients Messenger (automatiques ou non) apparaîtront ici."
+              title={t.empty}
+              message={t.emptyMessage}
             />
           )
         }

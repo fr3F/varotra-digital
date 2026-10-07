@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
-import { buildApp, type CarnetApp } from '../src/app.ts';
+import { type AppDeps, buildApp, type CarnetApp, createScheduledJobs } from '../src/app.ts';
 import type { AppConfig } from '../src/config.ts';
 import { openNodeDatabase } from '../src/db/node-sqlite.ts';
 import { createRepositories } from '../src/db/repositories.ts';
@@ -8,6 +8,7 @@ import type { QuickReply } from '../src/domain/types.ts';
 import type { MessengerClient } from '../src/messenger/messenger-client.ts';
 import { createTaskQueue } from '../src/messenger/messenger-service.ts';
 import { signPayload } from '../src/messenger/signature.ts';
+import type { PushClient, PushMessage, PushResult } from '../src/push/push-client.ts';
 
 interface InjectOptions {
   readonly method?: string;
@@ -47,7 +48,7 @@ const config: AppConfig = {
   port: 0,
   host: '127.0.0.1',
   databasePath: ':memory:',
-  meta: { appSecret: 'secret-de-test', verifyToken: 'jeton-verif', pageAccessToken: null, graphApiVersion: 'v25.0' },
+  meta: { appSecret: 'secret-de-test', verifyToken: 'jeton-verif', pageAccessToken: null, graphApiVersion: 'v25.0', buttonStyle: 'template' },
   pairingCode: 'CODE-1234',
   corsOrigins: ['http://localhost:8081'],
   legal: { businessName: 'Boutique <Rasoa>', contactEmail: 'contact@exemple.mg' },
@@ -71,16 +72,27 @@ function setup(now: () => Date = () => new Date()) {
       return 'Rasoa Be';
     },
   };
+  const pushed: PushMessage[] = [];
+  // Réponse simulée d'Expo Push, par jeton (ok par défaut).
+  const pushResults = new Map<string, PushResult>();
+  const pushClient: PushClient = {
+    async send(messages) {
+      pushed.push(...messages);
+      return messages.map((message) => pushResults.get(message.to) ?? 'ok');
+    },
+  };
   const queue = createTaskQueue();
-  const hono = buildApp({
+  const deps: AppDeps = {
     config,
     repos: createRepositories(openNodeDatabase(':memory:')),
     messengerClient: client,
+    pushClient,
     defer: (_c, task) => queue.push(task),
     now,
-  });
+  };
+  const hono = buildApp(deps);
   const app = { inject: (options: InjectOptions) => inject(hono, options) };
-  return { app, queue, sent };
+  return { app, queue, sent, pushed, pushResults, deps };
 }
 
 function webhook(psid: string, mid: string, message: Record<string, unknown>) {
@@ -147,19 +159,23 @@ describe('webhook Meta', () => {
     assert.equal((await postWebhook(ctx.app, webhook('u1', 'm1', { text: '2 huile tiko et 3 savon' }))).statusCode, 200);
     // Renvoi du même webhook par Meta : ignoré.
     await postWebhook(ctx.app, webhook('u1', 'm1', { text: '2 huile tiko et 3 savon' }));
-    await postWebhook(ctx.app, webhook('u1', 'm2', { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
+    // 3 savons demandés pour 2 en stock : pas de « Valider », le client ajuste son panier.
+    await postWebhook(ctx.app, webhook('u1', 'm2', { text: 'Ajuster', quick_reply: { payload: 'ADJUST' } }));
+    await postWebhook(ctx.app, webhook('u1', 'm3', { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
     await ctx.queue.idle();
 
-    assert.equal(ctx.sent.length, 2, 'panier puis confirmation');
-    assert.match(ctx.sent[0]?.text ?? '', /⚠️ stock : 2/);
-    assert.match(ctx.sent[1]?.text ?? '', /Commande reçue ✅ \(réf\. MSG-\d{8}-001\)/);
+    assert.equal(ctx.sent.length, 3, 'panier, panier ajusté, confirmation');
+    assert.match(ctx.sent[0]?.text ?? '', /⚠️ seulement 2 en stock/);
+    assert.ok(!ctx.sent[0]?.quickReplies?.some((reply) => reply.payload === 'CHECKOUT'));
+    assert.match(ctx.sent[1]?.text ?? '', /2 × Savon Nosy/);
+    assert.match(ctx.sent[2]?.text ?? '', /Commande reçue ✅ \(réf\. MSG-\d{8}-001\)/);
 
     const pending = await ctx.app.inject({ url: '/v1/orders/pending', headers: auth });
     const { orders } = pending.json<{ orders: { id: string; needsReview: boolean; customer: { name: string }; items: unknown[] }[] }>();
     assert.equal(orders.length, 1);
     assert.equal(orders[0]?.customer.name, 'Rasoa Be');
     assert.equal(orders[0]?.items.length, 2);
-    assert.equal(orders[0]?.needsReview, true, '3 savons demandés pour 2 disponibles');
+    assert.equal(orders[0]?.needsReview, false, 'panier ajusté au stock');
 
     const id = orders[0]?.id ?? '';
     const ack = await ctx.app.inject({ method: 'POST', url: '/v1/orders/ack', headers: auth, payload: { ids: [id] } });
@@ -184,7 +200,8 @@ describe('webhook Meta', () => {
     await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
     const body = JSON.stringify({
       object: 'page',
-      entry: [{ messaging: [{ sender: { id: 'u2' }, timestamp: clock.getTime(), message: { mid: 'x1', text: 'Valider', quick_reply: { payload: 'PRODUCT:p-huile' } } }] }],
+      // Même horloge que les messages suivants (sinon la conversation serait vue comme oubliée).
+      entry: [{ messaging: [{ sender: { id: 'u2' }, timestamp: Date.now(), message: { mid: 'x1', text: 'Valider', quick_reply: { payload: 'PRODUCT:p-huile' } } }] }],
     });
     await postWebhook(ctx.app, body);
     await postWebhook(ctx.app, webhook('u2', 'x2', { text: '1', quick_reply: { payload: 'QTY:1' } }));
@@ -236,7 +253,8 @@ describe('réponse automatique Facebook', () => {
 
   it('stock insuffisant : « Produit indisponible actuellement. » avec le détail', async () => {
     const ctx = setup();
-    const { auth, id } = await orderFrom(ctx, 'c2', '5 savon');
+    // Stock vendu entre-temps en boutique : l'application répond « indisponible ».
+    const { auth, id } = await orderFrom(ctx, 'c2', '2 savon');
     const result = await ctx.app.inject({
       method: 'POST',
       url: `/v1/orders/${id}/notify`,
@@ -262,7 +280,27 @@ describe('réponse automatique Facebook', () => {
     await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/notify`, headers: auth, payload: { event: 'CONFIRMED' } });
     await postWebhook(ctx.app, webhook('c3', 'c3-3', { text: 'Aiza ny kaomandiko ?' }));
     await ctx.queue.idle();
-    assert.match(ctx.sent.at(-1)?.text ?? '', /^Votre commande MSG-\d{8}-001 \(9 500 Ar\) est confirmée ✅\.$/);
+    // Question en malgache : réponse en malgache.
+    assert.match(
+      ctx.sent.at(-1)?.text ?? '',
+      /^Ny kaomandinao MSG-\d{8}-001 \(9\s500\sAr\) : voamafy ✅\.\n\n1\. 🛒 Kaomandy vaovao\n✍️ Valio amin’ny laharana \(ohatra: 1\)$/,
+    );
+
+    await postWebhook(ctx.app, webhook('c3', 'c3-4', { text: 'Où en est ma commande ?' }));
+    await ctx.queue.idle();
+    assert.match(ctx.sent.at(-1)?.text ?? '', /^Votre commande MSG-\d{8}-001 \(9\s500\sAr\) est confirmée ✅\.\n\n1\. 🛒 Nouvelle commande\n/);
+
+    // Facebook Lite n'affiche pas les boutons : « 1 » vaut un appui sur « Nouvelle commande ».
+    await postWebhook(ctx.app, webhook('c3', 'c3-5', { text: '1' }));
+    await ctx.queue.idle();
+    assert.match(ctx.sent.at(-1)?.text ?? '', /• Huile Tiko 1L/);
+  });
+
+  it('prévient le client dans sa langue (malgache)', async () => {
+    const ctx = setup();
+    const { auth, id } = await orderFrom(ctx, 'c5', 'Mila huile tiko 1 azafady');
+    const result = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/notify`, headers: auth, payload: { event: 'CONFIRMED' } });
+    assert.match(result.json<{ text: string }>().text, /^Voamafy ny kaomandinao\.\nLaharana MSG-\d{8}-001 — Totaly : 9 500 Ar$/);
   });
 
   it('refuse un événement inconnu', async () => {
@@ -270,6 +308,88 @@ describe('réponse automatique Facebook', () => {
     const { auth, id } = await orderFrom(ctx, 'c4', '1 huile');
     const result = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/notify`, headers: auth, payload: { event: 'PAID' } });
     assert.equal(result.statusCode, 400);
+  });
+});
+
+describe('relance des paniers abandonnés', () => {
+  it('relance une seule fois un panier non validé après 1 h, pas une commande validée', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
+    await postWebhook(ctx.app, webhook('r1', 'r1-1', { text: 'Salama, mila huile tiko roa' }));
+    await postWebhook(ctx.app, webhook('r2', 'r2-1', { text: '1 huile' }));
+    await postWebhook(ctx.app, webhook('r2', 'r2-2', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await ctx.queue.idle();
+    const before = ctx.sent.length;
+
+    const at = (hours: number) => createScheduledJobs({ ...ctx.deps, now: () => new Date(Date.now() + hours * 3600_000) });
+    await at(0.5).run();
+    assert.equal(ctx.sent.length, before, 'pas avant 1 h');
+
+    await at(2).run();
+    assert.equal(ctx.sent.length, before + 1, 'un seul client relancé (r1)');
+    assert.equal(ctx.sent.at(-1)?.psid, 'r1');
+    assert.match(ctx.sent.at(-1)?.text ?? '', /^Mbola miandry anao ny haronao 🛒/);
+
+    await at(3).run();
+    assert.equal(ctx.sent.length, before + 1, 'jamais deux relances pour le même panier');
+  });
+
+  it('met en avant (⭐) les produits les plus commandés', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
+    await postWebhook(ctx.app, webhook('p1', 'p1-1', { text: '2 savon' }));
+    await postWebhook(ctx.app, webhook('p1', 'p1-2', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('p2', 'p2-1', { text: 'menu' }));
+    await ctx.queue.idle();
+    assert.match(ctx.sent.at(-1)?.text ?? '', /• Savon Nosy — 1\D500\sAr ⭐ 🔥 plus que 2\n• Huile/);
+  });
+});
+
+describe('notifications push (nouvelle commande)', () => {
+  const PUSH_TOKEN = 'ExponentPushToken[AbCdEf123456789]';
+
+  async function order(ctx: ReturnType<typeof setup>, psid: string): Promise<void> {
+    await postWebhook(ctx.app, webhook(psid, `${psid}-1`, { text: '2 huile tiko' }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2`, { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
+    await ctx.queue.idle();
+  }
+
+  it('prévient le téléphone relié dès qu’une commande arrive', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
+
+    await order(ctx, 'u1');
+    assert.equal(ctx.pushed.length, 0, 'aucun jeton enregistré : pas de push');
+
+    const saved = await ctx.app.inject({ method: 'PUT', url: '/v1/devices/push-token', headers: auth, payload: { pushToken: PUSH_TOKEN } });
+    assert.deepEqual(saved.json(), { ok: true, push: true });
+    await order(ctx, 'u2');
+
+    assert.equal(ctx.pushed.length, 1);
+    const push = ctx.pushed[0];
+    assert.equal(push?.to, PUSH_TOKEN);
+    assert.equal(push?.channelId, 'orders-new');
+    assert.match(push?.title ?? '', /^Nouvelle commande MSG-\d{8}-002 · Rasoa Be$/);
+    assert.match(push?.body ?? '', /^2 × Huile Tiko 1L · 19\D?000\sAr$/u);
+    assert.equal(push?.data['screen'], 'messenger-order');
+  });
+
+  it('refuse un jeton invalide et oublie un jeton désinscrit', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
+
+    const bad = await ctx.app.inject({ method: 'PUT', url: '/v1/devices/push-token', headers: auth, payload: { pushToken: 'n importe quoi' } });
+    assert.equal(bad.statusCode, 400);
+
+    await ctx.app.inject({ method: 'PUT', url: '/v1/devices/push-token', headers: auth, payload: { pushToken: PUSH_TOKEN } });
+    ctx.pushResults.set(PUSH_TOKEN, 'unregistered');
+    await order(ctx, 'u1');
+    await order(ctx, 'u2');
+    assert.equal(ctx.pushed.length, 1, 'jeton oublié après « DeviceNotRegistered »');
   });
 });
 

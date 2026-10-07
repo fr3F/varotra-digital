@@ -12,4 +12,11 @@ export interface NotificationCenter {
   show(notification: LocalNotification): Promise<void>;
   /** Appelé quand le vendeur touche une notification (y compris au lancement de l'app). */
   onOpen(handler: (target: NotificationTarget) => void): () => void;
+  /** Appelé quand une notification push arrive pendant que l'application est ouverte. */
+  onReceive(handler: (target: NotificationTarget) => void): () => void;
+  /**
+   * Jeton Expo Push de ce téléphone (demande la permission si besoin), ou null : web, Expo Go,
+   * permission refusée. `projectId` : identifiant du projet EAS.
+   */
+  getPushToken(projectId: string): Promise<string | null>;
 }

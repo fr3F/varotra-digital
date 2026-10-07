@@ -1,3 +1,4 @@
+import { messagesOf } from '@/core/i18n/i18n';
 import { createStore } from '@/core/state/store';
 import { database } from '@/database/database';
 import { settingsRepository } from '@/database/repositories/settings.repository';
@@ -13,7 +14,9 @@ import {
   Product,
 } from '@/models';
 import { formatMoney } from '@/utils/money.utils';
+import { inboxService } from './inbox.service';
 import { notificationCenter } from './notification-center';
+import { notificationsMessages } from './notifications.messages';
 
 const PREFERENCE_PREFIX = 'notifications.';
 
@@ -22,6 +25,8 @@ export const notificationPreferencesStore = createStore<NotificationPreferences>
 
 /** Évite de redemander la permission à chaque notification si le vendeur l'a refusée. */
 let permissionAsked = false;
+/** Le serveur prévient déjà par push des commandes Messenger : pas de seconde notification à l'import. */
+let remotePushActive = false;
 
 async function deliver(notification: LocalNotification): Promise<boolean> {
   if (!notificationPreferencesStore.get()[notification.type]) {
@@ -40,12 +45,16 @@ async function deliver(notification: LocalNotification): Promise<boolean> {
 }
 
 /**
- * Programme l'envoi après la validation de la transaction en cours :
- * une opération annulée ne notifie jamais.
+ * Programme l'envoi après la validation de la transaction en cours : une opération annulée
+ * ne notifie jamais. L'événement est toujours gardé dans le centre de notifications ;
+ * `systemNotification: false` : pas de notification système (déjà prévenu par push).
  */
-function queue(notification: LocalNotification): void {
+function queue(notification: LocalNotification, options: { readonly systemNotification?: boolean } = {}): void {
   database.afterCommit(() => {
-    deliver(notification).catch((error: unknown) => console.warn('[Carnet] Notification non envoyée', error));
+    inboxService.record(notification).catch((error: unknown) => console.warn('[Carnet] Notification non gardée', error));
+    if (options.systemNotification !== false) {
+      deliver(notification).catch((error: unknown) => console.warn('[Carnet] Notification non envoyée', error));
+    }
   });
 }
 
@@ -66,6 +75,7 @@ export const notificationService = {
       { ...DEFAULT_NOTIFICATION_PREFERENCES },
     );
     notificationPreferencesStore.set(preferences);
+    await inboxService.load();
     await notificationCenter.setup();
   },
 
@@ -85,30 +95,38 @@ export const notificationService = {
 
   onOpen: notificationCenter.onOpen,
 
+  onReceive: notificationCenter.onReceive,
+
+  setRemotePushActive(active: boolean): void {
+    remotePushActive = active;
+  },
+
   notifyNewOrder(order: Order, clientName: string | null): void {
     const fromMessenger = order.source === 'MESSENGER';
+    const t = messagesOf(notificationsMessages);
     const check = !fromMessenger
       ? ''
       : order.needsReview
-        ? ' · à vérifier'
+        ? t.reviewSuffix
         : order.stockCheck === 'SHORTAGE'
-          ? ' · ⚠️ stock insuffisant'
+          ? t.shortageSuffix
           : order.stockCheck === 'OK'
-            ? ' · stock OK'
+            ? t.stockOkSuffix
             : '';
     queue({
       type: 'NEW_ORDER',
-      title: fromMessenger ? 'Nouvelle commande Messenger' : 'Nouvelle commande',
+      title: fromMessenger ? t.newMessengerOrder : t.newOrder,
       body: `${orderTitle(order, clientName)} — ${formatMoney(order.totalAmount)}${check}`,
       target: { screen: 'order', id: order.id },
-    });
+    }, { systemNotification: !(fromMessenger && remotePushActive) });
   },
 
   notifyOrderCompleted(order: Order, clientName: string | null): void {
+    const t = messagesOf(notificationsMessages);
     queue({
       type: 'ORDER_COMPLETED',
-      title: 'Commande livrée',
-      body: `${orderTitle(order, clientName)} — ${formatMoney(order.totalAmount)} encaissés`,
+      title: t.orderDelivered,
+      body: `${orderTitle(order, clientName)} — ${t.collected(formatMoney(order.totalAmount))}`,
       target: { screen: 'order', id: order.id },
     });
   },
@@ -124,13 +142,14 @@ export const notificationService = {
     if (!crossedThreshold && !becameOut) {
       return;
     }
+    const t = messagesOf(notificationsMessages);
     queue({
       type: 'LOW_STOCK',
-      title: available === 0 ? 'Rupture de stock' : 'Stock faible',
+      title: available === 0 ? t.outOfStock : t.lowStock,
       body:
         available === 0
-          ? `${product.name} n’est plus disponible.`
-          : `${product.name} : ${available} disponible(s), seuil d’alerte ${product.alertThreshold}.`,
+          ? t.noLongerAvailable(product.name)
+          : t.lowStockBody(product.name, available, product.alertThreshold),
       target: { screen: 'stock', id: product.id },
     });
   },
@@ -139,7 +158,7 @@ export const notificationService = {
   notifySyncError(details: string): void {
     queue({
       type: 'SYNC_ERROR',
-      title: 'Échec de la synchronisation',
+      title: messagesOf(notificationsMessages).syncFailed,
       body: details,
       target: { screen: 'dashboard' },
     });
@@ -147,6 +166,9 @@ export const notificationService = {
 
   /** Notification d'essai (écran Réglages) : ignore la préférence pour vérifier l'affichage. */
   async sendTest(type: NotificationType): Promise<boolean> {
+    const t = messagesOf(notificationsMessages);
+    // Visible aussi dans le centre de notifications (cloche), même sans autorisation système.
+    await inboxService.record({ type, title: t.testTitle, body: t.testBody, target: { screen: 'dashboard' } });
     let permission = await notificationCenter.getPermission();
     if (permission !== 'granted') {
       permission = await notificationService.requestPermission();
@@ -156,8 +178,8 @@ export const notificationService = {
     }
     await notificationCenter.show({
       type,
-      title: 'Test : notification',
-      body: 'Les notifications de Carnet Digital fonctionnent sur cet appareil.',
+      title: messagesOf(notificationsMessages).testTitle,
+      body: messagesOf(notificationsMessages).testBody,
       target: { screen: 'dashboard' },
     });
     return true;

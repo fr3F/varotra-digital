@@ -11,6 +11,11 @@ export interface AppConfig {
     /** Jeton d'accès de la Page. Absent : les réponses sont seulement journalisées (mode simulation). */
     readonly pageAccessToken: string | null;
     readonly graphApiVersion: string;
+    /**
+     * Forme des boutons du bot : `template` (boutons dans la bulle, visibles aussi sur Facebook Lite)
+     * ou `quick_replies` (réponses rapides au-dessus du clavier, absentes de Facebook Lite).
+     */
+    readonly buttonStyle: ButtonStyle;
   };
   /** Code à saisir dans l'application pour la relier à ce backend. */
   readonly pairingCode: string;
@@ -21,6 +26,9 @@ export interface AppConfig {
   /** Active les routes /dev (lecture des réponses envoyées, utile au simulateur). Jamais en production. */
   readonly devTools: boolean;
 }
+
+export type ButtonStyle = 'text_first' | 'template' | 'quick_replies';
+const BUTTON_STYLES: readonly ButtonStyle[] = ['text_first', 'template', 'quick_replies'];
 
 export class ConfigError extends Error {}
 
@@ -68,6 +76,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       verifyToken: required(env, 'META_VERIFY_TOKEN', 8),
       pageAccessToken: optional(env, 'META_PAGE_ACCESS_TOKEN'),
       graphApiVersion: optional(env, 'META_GRAPH_API_VERSION') ?? 'v25.0',
+      buttonStyle: BUTTON_STYLES.find((style) => style === optional(env, 'META_BUTTON_STYLE')) ?? 'text_first',
     },
     pairingCode: required(env, 'APP_PAIRING_CODE', 8),
     corsOrigins: (optional(env, 'CORS_ORIGINS') ?? '')

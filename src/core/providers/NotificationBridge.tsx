@@ -1,21 +1,6 @@
 import { ReactNode, useEffect } from 'react';
-import { router } from 'expo-router';
-import { NotificationTarget } from '@/models';
+import { openNotificationTarget, syncIfConnected } from '@/core/navigation/open-target';
 import { notificationService } from '@/services/notifications/notification.service';
-
-function openTarget(target: NotificationTarget): void {
-  switch (target.screen) {
-    case 'order':
-      router.push({ pathname: '/orders/[id]', params: { id: target.id } });
-      return;
-    case 'stock':
-      router.push({ pathname: '/stock/[productId]', params: { productId: target.id } });
-      return;
-    case 'dashboard':
-      router.navigate('/');
-      return;
-  }
-}
 
 /**
  * Initialise les notifications (préférences, canaux Android) une fois la base ouverte,
@@ -24,7 +9,17 @@ function openTarget(target: NotificationTarget): void {
 export function NotificationBridge({ children }: { readonly children: ReactNode }) {
   useEffect(() => {
     notificationService.init().catch((error: unknown) => console.warn('[Carnet] Notifications indisponibles', error));
-    return notificationService.onOpen(openTarget);
+    const stopOpen = notificationService.onOpen(openNotificationTarget);
+    // Push reçu application ouverte : la commande est importée tout de suite.
+    const stopReceive = notificationService.onReceive((target) => {
+      if (target.screen === 'messenger-order') {
+        void syncIfConnected();
+      }
+    });
+    return () => {
+      stopOpen();
+      stopReceive();
+    };
   }, []);
 
   return <>{children}</>;

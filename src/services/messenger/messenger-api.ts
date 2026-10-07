@@ -18,6 +18,8 @@ export interface CatalogEntry {
   readonly sku: string | null;
   readonly unitPrice: number;
   readonly available: number;
+  /** Argument de vente montré au client par le bot. */
+  readonly description: string | null;
 }
 
 const TIMEOUT_MS = 15_000;
@@ -128,6 +130,11 @@ export const messengerApi = {
 
   async unpair(baseUrl: string, token: string): Promise<void> {
     await request(baseUrl, '/v1/devices/unpair', { method: 'POST', body: '{}', token });
+  },
+
+  /** Jeton Expo Push du téléphone (null : plus de notification push). */
+  async setPushToken(baseUrl: string, token: string, pushToken: string | null): Promise<void> {
+    await request(baseUrl, '/v1/devices/push-token', { method: 'PUT', body: JSON.stringify({ pushToken }), token });
   },
 
   async pushCatalog(baseUrl: string, token: string, products: readonly CatalogEntry[]): Promise<void> {

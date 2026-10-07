@@ -27,6 +27,24 @@ export const notificationCenter: NotificationCenter = {
     await (await implementation)?.show(notification);
   },
 
+  onReceive(handler) {
+    let unsubscribe: (() => void) | null = null;
+    let disposed = false;
+    void implementation.then((center) => {
+      if (center !== null && !disposed) {
+        unsubscribe = center.onReceive(handler);
+      }
+    });
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  },
+
+  async getPushToken(projectId) {
+    return (await (await implementation)?.getPushToken(projectId)) ?? null;
+  },
+
   onOpen(handler) {
     let unsubscribe: (() => void) | null = null;
     let disposed = false;

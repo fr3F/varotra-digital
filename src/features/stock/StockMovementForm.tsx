@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { ValidationError } from '@/core/errors/app-error';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
@@ -11,20 +11,10 @@ import { FormField } from '@/shared/components/FormField';
 import { ErrorBanner } from '@/shared/components/StatusViews';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
 import { optionalText, parseNonNegativeInteger, parsePositiveInteger } from '@/utils/validation.utils';
+import { useMessages } from '@/core/i18n/i18n';
+import { stockMessages } from './stock.messages';
 
 type FormMode = 'ENTRY' | 'EXIT' | 'COUNT';
-
-const MODE_OPTIONS: readonly ChipOption<FormMode>[] = [
-  { value: 'ENTRY', label: 'Entrée' },
-  { value: 'EXIT', label: 'Sortie' },
-  { value: 'COUNT', label: 'Ajuster la quantité' },
-];
-
-const MODE_TEXTS: Readonly<Record<FormMode, { field: string; submit: string; placeholder: string }>> = {
-  ENTRY: { field: 'Quantité à ajouter', submit: "Enregistrer l'entrée", placeholder: 'Réapprovisionnement, achat…' },
-  EXIT: { field: 'Quantité à retirer', submit: 'Enregistrer la sortie', placeholder: 'Casse, perte, cadeau…' },
-  COUNT: { field: 'Quantité réelle comptée', submit: 'Corriger le stock', placeholder: 'Inventaire' },
-};
 
 /** Calcule la quantité après mouvement pour l'aperçu, ou null si la saisie est incomplète. */
 function previewQuantity(mode: FormMode, current: number, text: string): number | null {
@@ -48,12 +38,26 @@ interface StockMovementFormProps {
 }
 
 export function StockMovementForm({ product, onRecorded }: StockMovementFormProps) {
+  const t = useMessages(stockMessages);
+  const modeOptions = useMemo<readonly ChipOption<FormMode>[]>(
+    () => [
+      { value: 'ENTRY', label: t.modeEntry },
+      { value: 'EXIT', label: t.modeExit },
+      { value: 'COUNT', label: t.modeCount },
+    ],
+    [t],
+  );
+  const modeTexts: Readonly<Record<FormMode, { field: string; submit: string; placeholder: string }>> = {
+    ENTRY: { field: t.fieldEntry, submit: t.submitEntry, placeholder: t.placeholderEntry },
+    EXIT: { field: t.fieldExit, submit: t.submitExit, placeholder: t.placeholderExit },
+    COUNT: { field: t.fieldCount, submit: t.submitCount, placeholder: t.placeholderCount },
+  };
   const [mode, setMode] = useState<FormMode>('ENTRY');
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('');
   const { busy, error, run, clearError } = useAsyncAction();
 
-  const texts = MODE_TEXTS[mode];
+  const texts = modeTexts[mode];
   const preview = previewQuantity(mode, product.stockQuantity, quantity);
   // Le stock ne peut pas descendre sous les unités réservées par des commandes confirmées.
   const invalidPreview = preview !== null && preview < product.reservedQuantity;
@@ -77,7 +81,7 @@ export function StockMovementForm({ product, onRecorded }: StockMovementFormProp
           break;
         case 'COUNT': {
           if (quantity.trim().length === 0) {
-            throw new ValidationError(`Le champ « ${texts.field} » est obligatoire.`);
+            throw new ValidationError(t.required(texts.field));
           }
           result = await stockService.setQuantity(product.id, parseNonNegativeInteger(quantity, texts.field), note);
           break;
@@ -90,7 +94,7 @@ export function StockMovementForm({ product, onRecorded }: StockMovementFormProp
 
   return (
     <View style={styles.card}>
-      <ChipGroup accessibilityLabel="Type de mouvement" options={MODE_OPTIONS} selected={mode} onSelect={changeMode} />
+      <ChipGroup accessibilityLabel={t.movementType} options={modeOptions} selected={mode} onSelect={changeMode} />
       <View style={styles.spacer} />
       <ErrorBanner message={error} />
       <FormField
@@ -100,14 +104,14 @@ export function StockMovementForm({ product, onRecorded }: StockMovementFormProp
         value={quantity}
         onChangeText={setQuantity}
       />
-      <FormField label="Motif" value={reason} onChangeText={setReason} placeholder={texts.placeholder} />
+      <FormField label={t.reason} value={reason} onChangeText={setReason} placeholder={texts.placeholder} />
       {preview !== null ? (
         <Text style={[styles.preview, invalidPreview && styles.previewInvalid]}>
           {invalidPreview
             ? product.reservedQuantity > 0
-              ? `Stock insuffisant : ${available} disponible(s), ${product.reservedQuantity} réservé(s) pour des commandes.`
-              : `Stock insuffisant : seulement ${available} disponible(s).`
-            : `Stock : ${product.stockQuantity} → ${preview}`}
+              ? t.insufficientReserved(available, product.reservedQuantity)
+              : t.insufficient(available)
+            : t.previewChange(product.stockQuantity, preview)}
         </Text>
       ) : null}
       <AppButton

@@ -1,16 +1,21 @@
 import { useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack } from 'expo-router';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
-import { lineProfit, marginRate, PAYMENT_METHOD_LABELS, saleProfit } from '@/models';
+import { lineProfit, marginRate, saleProfit } from '@/models';
 import { saleService } from '@/services/sale.service';
 import { ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { Thumbnail } from '@/shared/components/Thumbnail';
 import { useQuery } from '@/shared/hooks/useQuery';
 import { formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
+import { salesMessages } from './sales.messages';
 
 export function SaleDetailScreen({ saleId }: { readonly saleId: string }) {
+  const t = useMessages(salesMessages);
+  const common = useMessages(commonMessages);
   const fetchDetail = useCallback(() => saleService.getDetail(saleId), [saleId]);
   const { data: detail, error } = useQuery(fetchDetail);
 
@@ -29,23 +34,23 @@ export function SaleDetailScreen({ saleId }: { readonly saleId: string }) {
       <View style={styles.card}>
         <Text style={styles.reference}>{sale.reference}</Text>
         <Text style={styles.meta}>
-          {formatDisplayDateTime(sale.soldAt)} · {PAYMENT_METHOD_LABELS[sale.paymentMethod]}
+          {formatDisplayDateTime(sale.soldAt)} · {common.paymentMethod[sale.paymentMethod]}
         </Text>
         <View style={styles.separator} />
-        <Text style={styles.label}>Client</Text>
-        <Text style={styles.value}>{client?.name ?? 'Client de passage'}</Text>
+        <Text style={styles.label}>{t.client}</Text>
+        <Text style={styles.value}>{client?.name ?? t.walkInClient}</Text>
         {client !== null ? (
           <Text
             accessibilityRole="link"
             onPress={() => router.push({ pathname: '/clients/[id]', params: { id: client.id } })}
             style={styles.link}
           >
-            Voir la fiche client
+            {t.seeClient}
           </Text>
         ) : null}
         {orderReference !== null && sale.orderId !== null ? (
           <>
-            <Text style={[styles.label, styles.spaced]}>Commande d’origine</Text>
+            <Text style={[styles.label, styles.spaced]}>{t.originOrder}</Text>
             <Text
               accessibilityRole="link"
               onPress={() => router.push({ pathname: '/orders/[id]', params: { id: sale.orderId ?? '' } })}
@@ -57,14 +62,14 @@ export function SaleDetailScreen({ saleId }: { readonly saleId: string }) {
         ) : null}
         {sale.notes ? (
           <>
-            <Text style={[styles.label, styles.spaced]}>Notes</Text>
+            <Text style={[styles.label, styles.spaced]}>{t.notes}</Text>
             <Text style={styles.value}>{sale.notes}</Text>
           </>
         ) : null}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Produits vendus</Text>
+        <Text style={styles.sectionTitle}>{t.soldProducts}</Text>
         {lines.map(({ item, productName, productImageUri }) => {
           const margin = lineProfit(item);
           return (
@@ -75,7 +80,7 @@ export function SaleDetailScreen({ saleId }: { readonly saleId: string }) {
                   {productName}
                 </Text>
                 <Text style={styles.meta}>
-                  {item.quantity} × {formatMoney(item.unitPrice)} · achat {formatMoney(item.unitCost)}
+                  {item.quantity} × {formatMoney(item.unitPrice)} · {t.purchasePrice(formatMoney(item.unitCost))}
                 </Text>
               </View>
               <View style={styles.lineAmounts}>
@@ -90,24 +95,22 @@ export function SaleDetailScreen({ saleId }: { readonly saleId: string }) {
         })}
         <View style={styles.totals}>
           <View style={styles.totalRow}>
-            <Text style={styles.meta}>Prix d’achat</Text>
+            <Text style={styles.meta}>{t.totalCost}</Text>
             <Text style={styles.value}>{formatMoney(sale.totalCost)}</Text>
           </View>
           <View style={styles.totalRow}>
-            <Text style={styles.meta}>Bénéfice{rate === null ? '' : ` (marge ${rate.toFixed(0)} %)`}</Text>
+            <Text style={styles.meta}>{t.profitWithMargin(rate === null ? null : rate.toFixed(0))}</Text>
             <Text style={[styles.profit, profit < 0 && styles.loss]}>{formatMoney(profit)}</Text>
           </View>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total encaissé</Text>
+            <Text style={styles.totalLabel}>{t.totalCollected}</Text>
             <Text style={styles.totalValue}>{formatMoney(sale.totalAmount)}</Text>
           </View>
         </View>
       </View>
 
       <Text style={styles.note}>
-        {sale.orderId === null
-          ? 'Le stock a été déduit lors de cette vente (mouvements « Vente » dans le module Stock).'
-          : 'Le stock a été déduit lors de la livraison de la commande.'}
+        {sale.orderId === null ? t.stockNoteSale : t.stockNoteOrder}
       </Text>
     </ScrollView>
   );

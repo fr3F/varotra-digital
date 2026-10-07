@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { toErrorMessage } from '@/core/errors/app-error';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
-import { isOrderEditable, ORDER_STATUS_LABELS, OrderStatus } from '@/models';
+import { isOrderEditable, OrderStatus } from '@/models';
 import { orderService } from '@/services/order.service';
 import { AppButton } from '@/shared/components/AppButton';
 import { FormField } from '@/shared/components/FormField';
@@ -17,27 +19,27 @@ import { useProducts } from '../products/useProducts';
 import { ProductLinesEditor } from '@/shared/components/ProductLinesEditor';
 import { previewLinesTotal } from '@/shared/forms/product-lines-form';
 import { EMPTY_ORDER_FORM, OrderFormState, orderDetailToForm, parseOrderForm } from './order-form';
+import { ordersMessages } from './orders.messages';
 
 interface OrderFormScreenProps {
-  /** null = nouvelle commande. */
-  readonly orderId: string | null;
-  /** Client présélectionné pour une nouvelle commande (ouverte depuis sa fiche). */
-  readonly initialClientId?: string | null;
+  readonly orderId: string;
 }
 
-export function OrderFormScreen({ orderId, initialClientId = null }: OrderFormScreenProps) {
-  const isNew = orderId === null;
-  const [form, setForm] = useState<OrderFormState>({ ...EMPTY_ORDER_FORM, clientId: initialClientId });
+/**
+ * Correction d'une commande reçue (client, produits, quantités, notes) avant sa validation.
+ * Les commandes ne sont pas créées dans l'application : elles arrivent par Messenger.
+ */
+export function OrderFormScreen({ orderId }: OrderFormScreenProps) {
+  const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
   const [loadedStatus, setLoadedStatus] = useState<OrderStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const { busy, error, run } = useAsyncAction();
+  const t = useMessages(ordersMessages);
+  const { orderStatus } = useMessages(commonMessages);
   const { products } = useProducts({ search: '', category: null });
   const { clients } = useClients();
 
   useEffect(() => {
-    if (orderId === null) {
-      return;
-    }
     let active = true;
     orderService
       .getDetail(orderId)
@@ -61,26 +63,21 @@ export function OrderFormScreen({ orderId, initialClientId = null }: OrderFormSc
 
   const save = () =>
     run(async () => {
-      const draft = parseOrderForm(form, (productId) => products.find((p) => p.id === productId)?.name ?? 'produit');
-      if (orderId === null) {
-        const created = await orderService.create(draft);
-        router.replace({ pathname: '/orders/[id]', params: { id: created.id } });
-      } else {
-        await orderService.update(orderId, draft);
-        goBackOr({ pathname: '/orders/[id]', params: { id: orderId } });
-      }
+      const draft = parseOrderForm(form, (productId) => products.find((p) => p.id === productId)?.name ?? t.unnamedProduct);
+      await orderService.update(orderId, draft);
+      goBackOr({ pathname: '/orders/[id]', params: { id: orderId } });
     });
 
-  if (!isNew && loadedStatus === null) {
+  if (loadedStatus === null) {
     return loadError === null ? <LoadingView /> : <ErrorBanner message={loadError} />;
   }
-  if (loadedStatus !== null && !isOrderEditable(loadedStatus)) {
+  if (!isOrderEditable(loadedStatus)) {
     return (
       <View style={styles.screen}>
-        <Stack.Screen options={{ title: 'Modifier la commande' }} />
+        <Stack.Screen options={{ title: t.editTitle }} />
         <EmptyState
-          title={`Commande « ${ORDER_STATUS_LABELS[loadedStatus]} »`}
-          message="Elle ne peut plus être modifiée. Remettez-la en préparation depuis son détail pour changer ses produits."
+          title={t.notEditableTitle(orderStatus[loadedStatus])}
+          message={t.notEditableMessage}
         />
       </View>
     );
@@ -88,7 +85,7 @@ export function OrderFormScreen({ orderId, initialClientId = null }: OrderFormSc
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior="height">
-      <Stack.Screen options={{ title: isNew ? 'Nouvelle commande' : 'Modifier la commande' }} />
+      <Stack.Screen options={{ title: t.editTitle }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <ErrorBanner message={error} />
 
@@ -107,28 +104,19 @@ export function OrderFormScreen({ orderId, initialClientId = null }: OrderFormSc
         />
 
         <FormField
-          label="Notes"
+          label={t.notes}
           multiline
           value={form.notes}
           onChangeText={(notes) => setForm((previous) => ({ ...previous, notes }))}
-          placeholder="Adresse de livraison, créneau, remarque…"
+          placeholder={t.notesPlaceholder}
         />
 
         <View style={styles.totalBox}>
-          <Text style={styles.totalLabel}>Montant total</Text>
+          <Text style={styles.totalLabel}>{t.totalAmount}</Text>
           <Text style={styles.totalValue}>{formatMoney(total)}</Text>
         </View>
 
-        <AppButton
-          label={isNew ? 'Créer la commande' : 'Enregistrer les modifications'}
-          onPress={() => void save()}
-          loading={busy}
-        />
-        {isNew ? (
-          <Text style={styles.hint}>
-            La commande est créée au statut « Nouvelle ». Le stock est vérifié et réservé lors de sa validation.
-          </Text>
-        ) : null}
+        <AppButton label={t.saveChanges} onPress={() => void save()} loading={busy} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -148,5 +136,4 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.primaryDark },
   totalValue: { fontSize: fontSize.xl, fontWeight: '800', color: colors.primaryDark, fontVariant: ['tabular-nums'] },
-  hint: { marginTop: spacing.md, fontSize: fontSize.sm, color: colors.textMuted, textAlign: 'center' },
 });

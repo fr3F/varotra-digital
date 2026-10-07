@@ -59,11 +59,13 @@ export function createFacebookNotificationService(deps: {
       if (draft === null) {
         return { delivered: false, reason: 'UNKNOWN_ORDER', text: null };
       }
-      const text = notificationText(event, draft, details);
+      const conversation = await repos.conversations.find(draft.psid);
+      // Message dans la langue de la conversation du client.
+      const text = notificationText(event, draft, details, conversation?.state.lang);
       // Le statut vu par le client suit la décision du vendeur, même si le message ne peut pas partir.
       await repos.drafts.setCustomerStatus(draft.id, event);
 
-      const lastMessage = (await repos.conversations.find(draft.psid))?.lastCustomerMessageAt ?? null;
+      const lastMessage = conversation?.lastCustomerMessageAt ?? null;
       if (lastMessage === null || now().getTime() - Date.parse(lastMessage) > MESSAGING_WINDOW_MS) {
         await repos.outgoing.log({ psid: draft.psid, text, status: 'OUTSIDE_WINDOW', draftId: draft.id, kind: event });
         return { delivered: false, reason: 'OUTSIDE_WINDOW', text };

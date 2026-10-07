@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { Client, EntityId } from '@/models';
 import { AppButton } from './AppButton';
 import { SelectionModal } from './SelectionModal';
+import { useMessages } from '@/core/i18n/i18n';
+import { sharedMessages } from '../shared.messages';
 
 interface ClientPickerProps {
   readonly clients: readonly Client[];
@@ -20,35 +21,36 @@ export function ClientPicker({
   selectedId,
   onChange,
   disabled = false,
-  emptyLabel = 'Aucun client sélectionné',
+  emptyLabel,
 }: ClientPickerProps) {
+  const t = useMessages(sharedMessages);
   const [visible, setVisible] = useState(false);
   const selected = clients.find((client) => client.id === selectedId) ?? null;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Client</Text>
+      <Text style={styles.label}>{t.client}</Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Choisir le client"
+        accessibilityLabel={t.chooseClientLabel}
         onPress={() => setVisible(true)}
         disabled={disabled}
         style={styles.box}
       >
         <View style={styles.texts}>
-          <Text style={styles.name}>{selected?.name ?? emptyLabel}</Text>
+          <Text style={styles.name}>{selected?.name ?? emptyLabel ?? t.noClientSelected}</Text>
           {selected?.phone ? <Text style={styles.meta}>{selected.phone}</Text> : null}
         </View>
-        <Text style={styles.change}>{selected === null ? 'Choisir' : 'Changer'}</Text>
+        <Text style={styles.change}>{selected === null ? t.choose : t.change}</Text>
       </Pressable>
 
       <SelectionModal
         visible={visible}
-        title="Choisir un client"
+        title={t.chooseClient}
         items={clients}
         keyOf={(client) => client.id}
         searchTextOf={(client) => `${client.name} ${client.phone ?? ''}`}
-        emptyMessage="Aucun client enregistré."
+        emptyMessage={t.noClients}
         onClose={() => setVisible(false)}
         onSelect={(client) => {
           onChange(client.id);
@@ -58,21 +60,11 @@ export function ClientPicker({
           <View style={styles.actions}>
             <View style={styles.action}>
               <AppButton
-                label="Sans client"
+                label={t.withoutClient}
                 variant="secondary"
                 onPress={() => {
                   onChange(null);
                   setVisible(false);
-                }}
-              />
-            </View>
-            <View style={styles.action}>
-              <AppButton
-                label="+ Nouveau client"
-                variant="secondary"
-                onPress={() => {
-                  setVisible(false);
-                  router.push('/clients/new');
                 }}
               />
             </View>

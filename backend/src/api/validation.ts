@@ -1,4 +1,5 @@
 import type { NotificationDetails } from '../domain/facebook-templates.ts';
+import { isExpoPushToken } from '../push/push-client.ts';
 import { type CatalogProduct, NOTIFICATION_EVENTS, type NotificationEvent, type UnavailableItem } from '../domain/types.ts';
 
 /** Erreur de saisie renvoyée en 400 à l'application. */
@@ -34,6 +35,18 @@ export function parsePairRequest(body: unknown): { pairingCode: string; deviceNa
   return { pairingCode: text(value['pairingCode'], 'pairingCode', 100), deviceName: text(value['deviceName'], 'deviceName', 80) };
 }
 
+/** `{ pushToken: "ExponentPushToken[…]" }`, ou `{ pushToken: null }` pour désactiver les notifications. */
+export function parsePushTokenRequest(body: unknown): string | null {
+  const value = record(body)['pushToken'];
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== 'string' || !isExpoPushToken(value)) {
+    throw new BadRequestError('Champ « pushToken » : jeton Expo Push attendu.');
+  }
+  return value;
+}
+
 export function parseCatalog(body: unknown): CatalogProduct[] {
   const value = record(body);
   const products = value['products'];
@@ -43,12 +56,15 @@ export function parseCatalog(body: unknown): CatalogProduct[] {
   return products.map((item: unknown, index) => {
     const product = record(item);
     const sku = product['sku'];
+    const description = product['description'];
     return {
       id: text(product['id'], `products[${index}].id`, 100),
       name: text(product['name'], `products[${index}].name`),
       sku: sku === null || sku === undefined ? null : text(sku, `products[${index}].sku`, 100),
       unitPrice: count(product['unitPrice'], `products[${index}].unitPrice`),
       available: count(product['available'], `products[${index}].available`),
+      // Facultative (anciennes versions de l'application) ; tronquée pour rester lisible sur Messenger.
+      description: typeof description === 'string' && description.trim().length > 0 ? description.trim().slice(0, 300) : null,
     };
   });
 }

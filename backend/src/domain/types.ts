@@ -1,3 +1,5 @@
+import { DEFAULT_LANG, type Lang } from './i18n.ts';
+
 /** Produit tel que l'application l'envoie au backend (copie du catalogue du téléphone). */
 export interface CatalogProduct {
   /** Identifiant du produit dans l'application (UUID). */
@@ -7,6 +9,8 @@ export interface CatalogProduct {
   readonly unitPrice: number;
   /** Quantité disponible au moment du dernier envoi (stock - réservations). */
   readonly available: number;
+  /** Description saisie dans l'application (argument de vente montré au client), ou null. */
+  readonly description: string | null;
 }
 
 export interface CartItem {
@@ -28,6 +32,10 @@ export interface ConversationState {
   readonly rawTexts: readonly string[];
   /** Dernier message non compris, que le client peut « envoyer tel quel » au vendeur. */
   readonly unparsedText: string | null;
+  /** Langue du client (détectée sur ses messages) : le bot lui répond dans cette langue. */
+  readonly lang: Lang;
+  /** Choix de la dernière réponse, dans l'ordre affiché : le client peut répondre par leur numéro. */
+  readonly choices: readonly QuickReply[];
 }
 
 export const INITIAL_CONVERSATION: ConversationState = {
@@ -35,6 +43,8 @@ export const INITIAL_CONVERSATION: ConversationState = {
   cart: [],
   rawTexts: [],
   unparsedText: null,
+  lang: DEFAULT_LANG,
+  choices: [],
 };
 
 export type DraftMode = 'GUIDED' | 'TEXT' | 'RAW';

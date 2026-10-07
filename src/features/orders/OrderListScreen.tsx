@@ -1,20 +1,26 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
-import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
-import { ORDER_STATUS_LABELS, ORDER_STATUSES, OrderStatus, OrderSummary } from '@/models';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
+import { colors, fontSize, radius, shadow, spacing } from '@/core/theme/theme';
+import { ORDER_STATUSES, OrderStatus, OrderSummary } from '@/models';
 import { orderService } from '@/services/order.service';
-import { AppButton } from '@/shared/components/AppButton';
 import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
+import { SearchField } from '@/shared/components/SearchField';
 import { EmptyState, ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
 import { MessengerBadges } from './MessengerBadges';
+import { ordersMessages } from './orders.messages';
 import { OrderStatusBadge } from './OrderStatusBadge';
 import { useOrders } from './useOrders';
 
 function OrderRow({ summary }: { readonly summary: OrderSummary }) {
   const { order, clientName, itemCount } = summary;
+  const t = useMessages(ordersMessages);
+  const { noClient } = useMessages(commonMessages);
   return (
     <Pressable
       accessibilityRole="button"
@@ -23,18 +29,20 @@ function OrderRow({ summary }: { readonly summary: OrderSummary }) {
     >
       <View style={styles.rowMain}>
         <View style={styles.rowTop}>
-          <Text style={styles.reference}>{order.reference}</Text>
-          <OrderStatusBadge status={order.status} />
+          <Text style={styles.client} numberOfLines={1}>
+            {clientName ?? noClient}
+          </Text>
+          <Text style={styles.total}>{formatMoney(order.totalAmount)}</Text>
         </View>
-        <MessengerBadges order={order} />
-        <Text style={styles.client} numberOfLines={1}>
-          {clientName ?? 'Client non renseigné'}
-        </Text>
+        <View style={styles.rowTop}>
+          <OrderStatusBadge status={order.status} />
+          <MessengerBadges order={order} />
+        </View>
         <Text style={styles.meta}>
-          {formatDisplayDateTime(order.orderedAt)} · {itemCount} produit(s)
+          {order.reference} · {formatDisplayDateTime(order.orderedAt)} · {t.productCount(itemCount)}
         </Text>
       </View>
-      <Text style={styles.total}>{formatMoney(order.totalAmount)}</Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </Pressable>
   );
 }
@@ -43,6 +51,8 @@ export function OrderListScreen() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<OrderStatus | null>(null);
   const { orders, countsByStatus, totalCount, loading, error, reload } = useOrders({ search, status });
+  const t = useMessages(ordersMessages);
+  const { orderStatus } = useMessages(commonMessages);
 
   // Le nom d'un client a pu changer depuis un autre écran.
   useFocusEffect(
@@ -53,30 +63,22 @@ export function OrderListScreen() {
 
   const statusOptions = useMemo<readonly ChipOption<OrderStatus | null>[]>(
     () => [
-      { value: null, label: `Toutes (${totalCount})` },
+      { value: null, label: t.allCount(totalCount) },
       ...ORDER_STATUSES.map((value) => ({
         value,
-        label: `${ORDER_STATUS_LABELS[value]} (${countsByStatus.get(value) ?? 0})`,
+        label: t.statusCount(orderStatus[value], countsByStatus.get(value) ?? 0),
       })),
     ],
-    [countsByStatus, totalCount],
+    [countsByStatus, totalCount, t, orderStatus],
   );
   const isFiltered = search.trim().length > 0 || status !== null;
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Commandes' }} />
+      <Stack.Screen options={{ title: t.title }} />
       <View style={styles.toolbar}>
-        <TextInput
-          accessibilityLabel="Rechercher une commande"
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Rechercher (référence, client)"
-          placeholderTextColor={colors.textMuted}
-          style={styles.search}
-          autoCorrect={false}
-        />
-        <ChipGroup accessibilityLabel="Filtrer par statut" options={statusOptions} selected={status} onSelect={setStatus} />
+        <SearchField accessibilityLabel={t.searchLabel} value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder} />
+        <ChipGroup accessibilityLabel={t.filterByStatus} options={statusOptions} selected={status} onSelect={setStatus} />
         <ErrorBanner message={error} />
       </View>
 
@@ -92,16 +94,14 @@ export function OrderListScreen() {
           contentContainerStyle={orders.length === 0 ? styles.emptyList : undefined}
           ListEmptyComponent={
             <EmptyState
-              title={isFiltered ? 'Aucune commande trouvée' : 'Aucune commande'}
-              message={isFiltered ? undefined : 'Enregistrez votre première commande client.'}
+              icon="receipt-outline"
+              title={isFiltered ? t.notFound : t.empty}
+              message={isFiltered ? undefined : t.emptyMessage}
             />
           }
         />
       )}
 
-      <View style={styles.footer}>
-        <AppButton label="+ Nouvelle commande" onPress={() => router.push('/orders/new')} />
-      </View>
     </View>
   );
 }
@@ -109,38 +109,22 @@ export function OrderListScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   toolbar: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
-  search: {
-    minHeight: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
   emptyList: { flexGrow: 1 },
   row: {
+    ...shadow,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  rowPressed: { backgroundColor: colors.background },
-  rowMain: { flex: 1, gap: 2 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  reference: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
-  client: { fontSize: fontSize.md, color: colors.text },
-  meta: { fontSize: fontSize.sm, color: colors.textMuted },
-  total: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  footer: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
     padding: spacing.lg,
+    borderRadius: radius.lg,
     backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
   },
+  rowPressed: { opacity: 0.85 },
+  rowMain: { flex: 1, gap: spacing.xs + 2 },
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, flexWrap: 'wrap' },
+  client: { flex: 1, fontSize: fontSize.md, fontWeight: '700', color: colors.text },
+  meta: { fontSize: fontSize.sm, color: colors.textMuted },
+  total: { fontSize: fontSize.md, fontWeight: '800', color: colors.primary, fontVariant: ['tabular-nums'] },
 });

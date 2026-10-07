@@ -51,4 +51,13 @@ export const notificationCenter: NotificationCenter = {
       openHandlers.delete(handler);
     };
   },
+
+  onReceive() {
+    // Pas de notification push sur le web : la synchronisation périodique suffit.
+    return () => undefined;
+  },
+
+  async getPushToken() {
+    return null;
+  },
 };

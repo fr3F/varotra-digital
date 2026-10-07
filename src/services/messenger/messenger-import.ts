@@ -49,6 +49,15 @@ async function resolveClient(remote: RemoteOrder): Promise<Client> {
   });
 }
 
+/** Commande locale issue de cette commande Messenger (identifiant serveur), ou null si pas encore importée. */
+export async function findImportedOrderId(remoteId: string): Promise<string | null> {
+  const row = await database.selectOne(`SELECT id FROM orders WHERE source = 'MESSENGER' AND external_ref = ?`, [
+    remoteId,
+  ]);
+  const id = row?.['id'];
+  return typeof id === 'string' ? id : null;
+}
+
 /**
  * Importe une commande Messenger dans l'application : client, lignes (produits encore existants),
  * vérification automatique du stock. Idempotent : une commande déjà importée est ignorée.

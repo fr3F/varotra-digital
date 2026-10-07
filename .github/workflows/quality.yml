@@ -1,0 +1,114 @@
+# Qualité du code (QA) : complète ci.yml (lint, typecheck, tests) sur chaque Pull Request.
+name: Qualité
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    name: Titre de PR (Conventional Commits)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier le titre
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .+'
+          if [[ "$TITLE" =~ $pattern ]]; then
+            echo "Titre conforme : $TITLE"
+          else
+            echo "::error::Titre « $TITLE » non conforme. Exemple : feat(orders): ajuster au stock disponible"
+            exit 1
+          fi
+
+  lint-strict:
+    name: Lint strict (0 avertissement)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm install -g npm@11.6.2  # même npm qu'en local : le lock file en dépend
+      - run: npm ci
+      - run: npx expo lint --max-warnings 0
+
+  coverage:
+    name: Couverture des tests serveur (≥ 90 % lignes)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm install -g npm@11.6.2
+      - run: npm ci
+      - name: Tests avec seuils de couverture
+        run: |
+          npm run test:coverage 2>&1 | tee coverage.txt
+          {
+            echo '### Couverture du serveur'
+            echo '```'
+            grep -E 'file +\||all files|^ℹ -' coverage.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  expo-doctor:
+    name: Santé du projet Expo (expo-doctor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm install -g npm@11.6.2
+      - run: npm ci
+      - run: npx expo-doctor
+
+  audit:
+    name: Vulnérabilités des dépendances
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install -g npm@11.6.2
+      # Bloquant : vulnérabilités critiques dans les dépendances livrées. Le reste est publié dans le résumé.
+      - name: Application
+        run: |
+          npm audit --omit=dev > audit-app.txt || true
+          { echo '### npm audit — application'; echo '```'; tail -n 3 audit-app.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          npm audit --omit=dev --audit-level=critical
+      - name: Serveur
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+
+  secrets:
+    name: Recherche de secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest git /repo --redact --no-banner --exit-code 1

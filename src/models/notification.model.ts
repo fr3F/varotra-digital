@@ -30,7 +30,21 @@ export type NotificationPermission = 'granted' | 'denied' | 'undetermined' | 'un
 export type NotificationTarget =
   | { readonly screen: 'order'; readonly id: string }
   | { readonly screen: 'stock'; readonly id: string }
+  /** Commande Messenger annoncée par push avant son import : `id` = identifiant côté serveur. */
+  | { readonly screen: 'messenger-order'; readonly id: string }
   | { readonly screen: 'dashboard' };
+
+/** Notification gardée dans le centre de notifications (cloche de l'en-tête). */
+export interface InboxNotification {
+  readonly id: string;
+  readonly type: NotificationType;
+  readonly title: string;
+  readonly body: string;
+  /** Écran à ouvrir, ou null si la cible n'est plus lisible. */
+  readonly target: NotificationTarget | null;
+  readonly createdAt: string;
+  readonly readAt: string | null;
+}
 
 /** Contenu d'une notification locale. */
 export interface LocalNotification {
@@ -47,7 +61,7 @@ export function parseNotificationTarget(data: Readonly<Record<string, unknown>> 
   if (screen === 'dashboard') {
     return { screen };
   }
-  if ((screen === 'order' || screen === 'stock') && typeof id === 'string' && id.length > 0) {
+  if ((screen === 'order' || screen === 'stock' || screen === 'messenger-order') && typeof id === 'string' && id.length > 0) {
     return { screen, id };
   }
   return null;

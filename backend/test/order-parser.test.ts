@@ -4,11 +4,11 @@ import { parseOrderMessage } from '../src/domain/order-parser.ts';
 import type { CatalogProduct } from '../src/domain/types.ts';
 
 const catalog: CatalogProduct[] = [
-  { id: 'huile', name: 'Huile Tiko 1L', sku: 'HT1', unitPrice: 9500, available: 10 },
-  { id: 'savon', name: 'Savon Nosy', sku: null, unitPrice: 1500, available: 20 },
-  { id: 'riz', name: 'Riz Makalioka 1kg', sku: null, unitPrice: 4000, available: 0 },
-  { id: 'coca', name: 'Coca-Cola 1,5L', sku: null, unitPrice: 6000, available: 5 },
-  { id: 'coca-small', name: 'Coca-Cola 33cl', sku: null, unitPrice: 2500, available: 5 },
+  { id: 'huile', name: 'Huile Tiko 1L', sku: 'HT1', unitPrice: 9500, available: 10, description: null },
+  { id: 'savon', name: 'Savon Nosy', sku: null, unitPrice: 1500, available: 20, description: null },
+  { id: 'riz', name: 'Riz Makalioka 1kg', sku: null, unitPrice: 4000, available: 0, description: null },
+  { id: 'coca', name: 'Coca-Cola 1,5L', sku: null, unitPrice: 6000, available: 5, description: null },
+  { id: 'coca-small', name: 'Coca-Cola 33cl', sku: null, unitPrice: 2500, available: 5, description: null },
 ];
 
 const lines = (text: string) =>

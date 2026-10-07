@@ -1,0 +1,215 @@
+import { defineMessages } from '@/core/i18n/i18n';
+
+interface PermissionText {
+  readonly title: string;
+  readonly message: string;
+}
+
+/** Textes de l'écran Réglages (notifications, Messenger, zone de danger). */
+export const settingsMessages = defineMessages(
+  {
+    title: 'Réglages',
+    notifications: 'Notifications',
+    permission: {
+      granted: { title: 'Notifications autorisées', message: 'Carnet Digital peut vous prévenir sur cet appareil.' },
+      undetermined: {
+        title: 'Autorisation pas encore demandée',
+        message: 'Autorisez les notifications pour être prévenu des commandes et du stock.',
+      },
+      denied: {
+        title: 'Notifications bloquées',
+        message: 'Réactivez-les dans les paramètres du téléphone (Applications › Carnet Digital › Notifications).',
+      },
+      unsupported: { title: 'Non disponible', message: 'Ce navigateur ne gère pas les notifications.' },
+    } as Readonly<Record<'granted' | 'undetermined' | 'denied' | 'unsupported', PermissionText>>,
+    allowNotifications: 'Autoriser les notifications',
+    notifyMeFor: 'Me prévenir pour…',
+    sendTest: 'Envoyer un test',
+    testSent: 'Notification de test envoyée.',
+    testFailed: 'Impossible d’envoyer : les notifications ne sont pas autorisées.',
+    messenger: {
+      title: 'Commandes Facebook Messenger',
+      intro:
+        'Reliez l’application au serveur Carnet Digital qui reçoit les messages de votre Page Facebook. L’application ne contacte jamais Facebook directement.',
+      serverUrl: 'Adresse du serveur',
+      serverUrlPlaceholder: 'https://mon-serveur.com',
+      pairingCode: 'Code d’appairage',
+      pairingCodePlaceholder: 'Défini sur le serveur',
+      deviceName: 'Nom de cet appareil',
+      defaultDeviceName: 'Téléphone du vendeur',
+      connect: 'Connecter',
+      syncReport: (imported: number, sent: number) =>
+        `Synchronisé : ${imported} nouvelle(s) commande(s), ${sent} client(s) prévenu(s).`,
+      disconnectTitle: 'Déconnecter Messenger',
+      disconnectMessage: 'Les nouvelles commandes Facebook ne seront plus récupérées.',
+      disconnect: 'Déconnecter',
+      connectedTo: (url: string) => `Connecté à ${url}`,
+      syncing: 'Synchronisation en cours…',
+      neverSynced: 'Jamais synchronisé',
+      lastSync: (date: string) => `Dernière synchronisation : ${date}`,
+      pushActive: 'Notifications push actives : chaque commande Messenger est signalée, même application fermée.',
+      pushInactive:
+        'Notifications push inactives (APK et notifications « Nouvelle commande » requis) : vérification toutes les 15 s, application ouverte.',
+      lastError: (message: string) => `Dernière erreur : ${message}`,
+      autoReply: 'Réponse automatique',
+      autoReplyDescription:
+        'Stock disponible : commande validée et « Votre commande est confirmée. ». Stock insuffisant : « Produit indisponible actuellement. ». Messages incompris : vous décidez.',
+      notifyCustomer: 'Prévenir le client',
+      notifyCustomerDescription:
+        'Message Messenger quand vous confirmez, livrez ou annulez une commande (dans les 24 h suivant son dernier message).',
+      syncNow: 'Synchroniser maintenant',
+      replyHistory: 'Historique des réponses',
+    },
+    danger: {
+      title: 'Zone de danger',
+      cardTitle: 'Supprimer toutes les données',
+      description:
+        'Produits, stock, commandes, ventes, dépenses, clients et photos. Les réglages et la liaison Messenger sont conservés.',
+      summary: (products: number, orders: number, sales: number, clients: number, expenses: number) =>
+        `${products} produit(s), ${orders} commande(s), ${sales} vente(s), ${clients} client(s), ${expenses} dépense(s)`,
+      firstTitle: 'Supprimer toutes les données ?',
+      firstMessage: (details: string) =>
+        `Seront supprimés : ${details}, ainsi que le stock, l’historique et les photos des produits.`,
+      secondTitle: 'Dernière confirmation',
+      secondMessage: 'Cette action est définitive : les données ne pourront pas être récupérées.',
+      deleteAll: 'Tout supprimer',
+      done: 'Toutes les données ont été supprimées.',
+    },
+  },
+  {
+    mg: {
+      title: 'Fikirana',
+      notifications: 'Fampandrenesana',
+      permission: {
+        granted: { title: 'Mahazo alalana ny fampandrenesana', message: 'Afaka mampandre anao amin’ity finday ity ny Carnet Digital.' },
+        undetermined: {
+          title: 'Mbola tsy nangatahana alalana',
+          message: 'Omeo alalana ny fampandrenesana mba hahafantaranao ny kaomandy sy ny tahiry.',
+        },
+        denied: {
+          title: 'Voasakana ny fampandrenesana',
+          message: 'Alefaso indray ao amin’ny Paramètres an’ny finday (Applications › Carnet Digital › Notifications).',
+        },
+        unsupported: { title: 'Tsy misy', message: 'Tsy mahay mampiseho fampandrenesana ity navigateur ity.' },
+      },
+      allowNotifications: 'Omeo alalana ny fampandrenesana',
+      notifyMeFor: 'Ampandreneso aho momba…',
+      sendTest: 'Alefaso andrana',
+      testSent: 'Lasa ny fampandrenesana andrana.',
+      testFailed: 'Tsy lasa : tsy nomena alalana ny fampandrenesana.',
+      messenger: {
+        title: 'Kaomandy Facebook Messenger',
+        intro:
+          'Ampifandraiso amin’ny mpizara Carnet Digital mandray ny hafatry ny pejy Facebook-nao ity fampiharana ity. Tsy mifandray mivantana amin’ny Facebook mihitsy ny fampiharana.',
+        serverUrl: 'Adiresin’ny mpizara',
+        serverUrlPlaceholder: 'https://mon-serveur.com',
+        pairingCode: 'Kaody fampifandraisana',
+        pairingCodePlaceholder: 'Voafaritra ao amin’ny mpizara',
+        deviceName: 'Anaran’ity finday ity',
+        defaultDeviceName: 'Findain’ny mpivarotra',
+        connect: 'Ampifandraisina',
+        syncReport: (imported, sent) => `Vita : kaomandy vaovao ${imported}, mpividy ${sent} nampandrenesina.`,
+        disconnectTitle: 'Hanapaka ny Messenger',
+        disconnectMessage: 'Tsy ho raisina intsony ny kaomandy vaovao avy amin’ny Facebook.',
+        disconnect: 'Tapahina',
+        connectedTo: (url) => `Mifandray amin’ny ${url}`,
+        syncing: 'Eo am-pampifanarahana…',
+        neverSynced: 'Mbola tsy nisy fampifanarahana',
+        lastSync: (date) => `Fampifanarahana farany : ${date}`,
+        pushActive: 'Mandeha ny fampandrenesana push : ampandrenesina ianao isaky ny misy kaomandy Messenger, na mikatona aza ny fampiharana.',
+        pushInactive:
+          'Tsy mandeha ny fampandrenesana push (mila APK sy ny fampandrenesana « Kaomandy vaovao ») : jerena isaky ny 15 segondra raha misokatra ny fampiharana.',
+        lastError: (message) => `Olana farany : ${message}`,
+        autoReply: 'Valiny ho azy',
+        autoReplyDescription:
+          'Raha misy ny entana : voamafy ny kaomandy ary lasa ny « Votre commande est confirmée. ». Raha tsy ampy : « Produit indisponible actuellement. ». Hafatra tsy azo : ianao no manapa-kevitra.',
+        notifyCustomer: 'Hampandre ny mpividy',
+        notifyCustomerDescription:
+          'Hafatra Messenger rehefa manamafy, manatitra na manafoana kaomandy ianao (ao anatin’ny 24 ora taorian’ny hafany farany).',
+        syncNow: 'Ampifanaraho izao',
+        replyHistory: 'Tantaran’ny valiny',
+      },
+      danger: {
+        title: 'Faritra mampidi-doza',
+        cardTitle: 'Hamafa ny angona rehetra',
+        description:
+          'Entana, tahiry, kaomandy, varotra, fandaniana, mpividy ary sary. Tsy voafafa kosa ny fikirana sy ny fifandraisana amin’ny Messenger.',
+        summary: (products, orders, sales, clients, expenses) =>
+          `entana ${products}, kaomandy ${orders}, varotra ${sales}, mpividy ${clients}, fandaniana ${expenses}`,
+        firstTitle: 'Hofafana daholo ve ny angona ?',
+        firstMessage: (details) => `Ho voafafa : ${details}, miaraka amin’ny tahiry, ny tantara ary ny sarin’ny entana.`,
+        secondTitle: 'Fanamarinana farany',
+        secondMessage: 'Tsy azo averina ity : tsy ho hita intsony ny angona.',
+        deleteAll: 'Fafana daholo',
+        done: 'Voafafa daholo ny angona.',
+      },
+    },
+    en: {
+      title: 'Settings',
+      notifications: 'Notifications',
+      permission: {
+        granted: { title: 'Notifications allowed', message: 'Carnet Digital can alert you on this device.' },
+        undetermined: {
+          title: 'Permission not requested yet',
+          message: 'Allow notifications to be alerted about orders and stock.',
+        },
+        denied: {
+          title: 'Notifications blocked',
+          message: 'Turn them back on in the phone settings (Apps › Carnet Digital › Notifications).',
+        },
+        unsupported: { title: 'Not available', message: 'This browser does not support notifications.' },
+      },
+      allowNotifications: 'Allow notifications',
+      notifyMeFor: 'Alert me about…',
+      sendTest: 'Send a test',
+      testSent: 'Test notification sent.',
+      testFailed: 'Cannot send: notifications are not allowed.',
+      messenger: {
+        title: 'Facebook Messenger orders',
+        intro:
+          'Connect the app to the Carnet Digital server that receives your Facebook Page messages. The app never contacts Facebook directly.',
+        serverUrl: 'Server address',
+        serverUrlPlaceholder: 'https://my-server.com',
+        pairingCode: 'Pairing code',
+        pairingCodePlaceholder: 'Set on the server',
+        deviceName: 'Name of this device',
+        defaultDeviceName: 'Seller’s phone',
+        connect: 'Connect',
+        syncReport: (imported, sent) => `Synced: ${imported} new order(s), ${sent} customer(s) notified.`,
+        disconnectTitle: 'Disconnect Messenger',
+        disconnectMessage: 'New Facebook orders will no longer be received.',
+        disconnect: 'Disconnect',
+        connectedTo: (url) => `Connected to ${url}`,
+        syncing: 'Syncing…',
+        neverSynced: 'Never synced',
+        lastSync: (date) => `Last sync: ${date}`,
+        pushActive: 'Push notifications on: every Messenger order is announced, even when the app is closed.',
+        pushInactive:
+          'Push notifications off (requires the APK and “New order” notifications): checked every 15 s while the app is open.',
+        lastError: (message) => `Last error: ${message}`,
+        autoReply: 'Automatic reply',
+        autoReplyDescription:
+          'In stock: order confirmed and “Votre commande est confirmée.” sent. Not enough stock: “Produit indisponible actuellement.”. Unclear messages: you decide.',
+        notifyCustomer: 'Notify the customer',
+        notifyCustomerDescription:
+          'Messenger message when you confirm, deliver or cancel an order (within 24 h of their last message).',
+        syncNow: 'Sync now',
+        replyHistory: 'Reply history',
+      },
+      danger: {
+        title: 'Danger zone',
+        cardTitle: 'Delete all data',
+        description:
+          'Products, stock, orders, sales, expenses, customers and photos. Settings and the Messenger connection are kept.',
+        summary: (products, orders, sales, clients, expenses) =>
+          `${products} product(s), ${orders} order(s), ${sales} sale(s), ${clients} customer(s), ${expenses} expense(s)`,
+        firstTitle: 'Delete all data?',
+        firstMessage: (details) => `This will delete: ${details}, as well as stock, history and product photos.`,
+        secondTitle: 'Final confirmation',
+        secondMessage: 'This cannot be undone: the data cannot be recovered.',
+        deleteAll: 'Delete everything',
+        done: 'All data has been deleted.',
+      },
+    },
+  },
+);

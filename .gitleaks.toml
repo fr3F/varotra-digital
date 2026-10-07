@@ -1,0 +1,11 @@
+# Recherche de secrets (pipeline Qualité) : règles par défaut de gitleaks,
+# sauf les valeurs factices des tests et du fichier d'exemple.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Données de test et exemples de configuration"
+paths = [
+  '''^backend/test/''',
+  '''^backend/\.env\.example$''',
+]

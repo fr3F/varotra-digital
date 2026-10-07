@@ -35,4 +35,8 @@ export const imageStorage: ImageStorage = {
   async remove() {
     // Rien à supprimer : l'image disparaît avec la ligne SQLite.
   },
+
+  async removeAll() {
+    // Web : les images sont dans SQLite (data URI), supprimées avec les produits.
+  },
 };

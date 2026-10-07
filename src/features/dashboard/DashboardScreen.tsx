@@ -1,10 +1,23 @@
+import type { ComponentProps } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Href, router, Stack, useFocusEffect } from 'expo-router';
 import { APP_NAME } from '@/core/constants/app.constants';
 import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
-import { availableQuantity, EXPENSE_CATEGORY_LABELS, Period, PERIOD_LABELS, PERIODS } from '@/models';
+import { commonMessages } from '@/core/i18n/common.messages';
+import { useMessages } from '@/core/i18n/i18n';
+import {
+  availableQuantity,
+  Period,
+  periodStart,
+  PERIODS,
+  REVENUE_BUCKET_COUNTS,
+  REVENUE_COUNT_LIMITS,
+  REVENUE_GRANULARITIES,
+  RevenueGranularity,
+} from '@/models';
 import { dashboardService } from '@/services/dashboard.service';
 import { expensesVersion } from '@/services/expense.service';
 import { orderStore } from '@/services/order.service';
@@ -13,35 +26,57 @@ import { stockMovementVersion } from '@/services/stock-movement.service';
 import { AppButton } from '@/shared/components/AppButton';
 import { BarList } from '@/shared/components/charts/BarList';
 import { ColumnChart } from '@/shared/components/charts/ColumnChart';
-import { ChipGroup, ChipOption } from '@/shared/components/ChipGroup';
+import { NumberStepper } from '@/shared/components/NumberStepper';
+import { SegmentedControl, SegmentOption } from '@/shared/components/SegmentedControl';
 import { StatCard } from '@/shared/components/StatCard';
 import { ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { useQuery } from '@/shared/hooks/useQuery';
-import { formatShortDay } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
+import { dashboardMessages } from './dashboard.messages';
+
+type ModuleKey = 'stock' | 'clients' | 'expenses' | 'sales' | 'orders' | 'products';
 
 interface ModuleTile {
-  readonly label: string;
+  readonly key: ModuleKey;
   readonly href: Href;
+  readonly icon: ComponentProps<typeof Ionicons>['name'];
 }
 
+/** Accès rapides (les écrans principaux sont aussi dans la barre d'onglets). */
 const MODULES: readonly ModuleTile[] = [
-  { label: 'Ventes', href: '/sales' },
-  { label: 'Commandes', href: '/orders' },
-  { label: 'Produits', href: '/products' },
-  { label: 'Stock', href: '/stock' },
-  { label: 'Clients', href: '/clients' },
-  { label: 'Dépenses', href: '/expenses' },
+  { key: 'stock', href: '/stock', icon: 'layers-outline' },
+  { key: 'clients', href: '/clients', icon: 'people-outline' },
+  { key: 'expenses', href: '/expenses', icon: 'wallet-outline' },
+  { key: 'sales', href: '/sales', icon: 'cash-outline' },
+  { key: 'orders', href: '/orders', icon: 'receipt-outline' },
+  { key: 'products', href: '/products', icon: 'cube-outline' },
 ];
-
-const PERIOD_OPTIONS: readonly ChipOption<Period>[] = PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }));
 
 /** Au-delà de cette largeur (tablette, web), les cartes passent sur 4 colonnes. */
 const WIDE_LAYOUT = 720;
 
 export function DashboardScreen() {
+  const t = useMessages(dashboardMessages);
+  const common = useMessages(commonMessages);
   const [period, setPeriod] = useState<Period>('TODAY');
+  const periodOptions = useMemo<readonly SegmentOption<Period>[]>(
+    () => PERIODS.map((value) => ({ value, label: common.period[value] })),
+    [common],
+  );
   const { width } = useWindowDimensions();
+  // Dates lisibles dans la langue choisie : « mar. 6 oct. », « 30/09 ».
+  const today = new Date();
+  const longDay = (date: Date) =>
+    `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()} ${t.monthsShort[date.getMonth()] ?? ''}`;
+  const shortDay = (date: Date) =>
+    `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const start = periodStart(period, today);
+  const periodRange =
+    start === null
+      ? t.allTime
+      : period === 'TODAY'
+        ? longDay(today)
+        : `${shortDay(new Date(start))} – ${shortDay(today)}`;
   const basis = width >= WIDE_LAYOUT ? '22%' : '45%';
 
   // Toute écriture (vente, dépense, stock, commande) rafraîchit les indicateurs.
@@ -56,24 +91,65 @@ export function DashboardScreen() {
     }, [reload]),
   );
 
-  const chartData = useMemo(
-    () =>
-      (data?.last7Days ?? []).map((day) => ({
-        key: day.day,
-        label: formatShortDay(day.day),
-        value: day.revenue,
-        detail: `bénéfice ${formatMoney(day.profit)} · ${day.salesCount} vente(s)`,
-      })),
-    [data],
+  // Graphique du chiffre d'affaires : découpage choisi (jours, semaines, mois, années).
+  const [granularity, setGranularity] = useState<RevenueGranularity>('DAY');
+  // Nombre de barres choisi pour chaque découpage (gardé quand on passe de l'un à l'autre).
+  const [counts, setCounts] = useState<Readonly<Record<RevenueGranularity, number>>>(REVENUE_BUCKET_COUNTS);
+  const count = counts[granularity];
+  const fetchSeries = useCallback(() => dashboardService.revenueSeries(granularity, count), [granularity, count]);
+  const { data: series } = useQuery(fetchSeries, version);
+  const limits = REVENUE_COUNT_LIMITS[granularity];
+  const granularityOptions = useMemo<readonly SegmentOption<RevenueGranularity>[]>(
+    () => REVENUE_GRANULARITIES.map((value) => ({ value, label: t.granularity[value] })),
+    [t],
   );
+  const chartData = useMemo(() => {
+    const fullLabel = (iso: string): string => {
+      const date = new Date(iso);
+      const dayMonth = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      switch (granularity) {
+        case 'DAY':
+          return `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()} ${t.monthsShort[date.getMonth()] ?? ''}`;
+        case 'WEEK':
+          return t.weekStart(dayMonth);
+        case 'MONTH':
+          return `${t.monthsShort[date.getMonth()] ?? ''} ${date.getFullYear()}`;
+        case 'YEAR':
+          return String(date.getFullYear());
+      }
+    };
+    const label = (iso: string): string => {
+      const date = new Date(iso);
+      const dayMonth = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      switch (granularity) {
+        // Beaucoup de barres : étiquettes courtes (le détail complet s'affiche au-dessus du graphique).
+        case 'DAY':
+          return count > 7 ? String(date.getDate()) : `${t.weekdaysShort[date.getDay()] ?? ''} ${date.getDate()}`;
+        case 'WEEK':
+          // Axe : date courte du lundi ; « sem. 05/10 » complet au-dessus du graphique.
+          return dayMonth;
+        case 'MONTH':
+          return t.monthsShort[date.getMonth()] ?? '';
+        case 'YEAR':
+          return String(date.getFullYear());
+      }
+    };
+    return (series ?? []).map((bucket) => ({
+      key: bucket.day,
+      label: label(bucket.day),
+      fullLabel: fullLabel(bucket.day),
+      value: bucket.revenue,
+      detail: t.dayDetail(formatMoney(bucket.profit), bucket.salesCount),
+    }));
+  }, [series, granularity, count, t]);
   const expenseData = useMemo(
     () =>
       (data?.expensesByCategory ?? []).map((entry) => ({
         key: entry.category,
-        label: EXPENSE_CATEGORY_LABELS[entry.category],
+        label: common.expenseCategory[entry.category],
         value: entry.total,
       })),
-    [data],
+    [data, common],
   );
 
   return (
@@ -82,97 +158,134 @@ export function DashboardScreen() {
       contentContainerStyle={[styles.content, width >= WIDE_LAYOUT && styles.contentWide]}
       refreshControl={<RefreshControl refreshing={loading && data !== null} onRefresh={reload} />}
     >
-      <Stack.Screen
-        options={{
-          title: APP_NAME,
-          headerRight: () => (
-            <Pressable accessibilityRole="button" onPress={() => router.push('/settings')} hitSlop={12}>
-              <Text style={styles.headerLink}>Réglages</Text>
-            </Pressable>
-          ),
-        }}
-      />
+      {/* À droite de l'en-tête : menu des langues (défini pour tous les écrans dans les layouts). */}
+      <Stack.Screen options={{ title: APP_NAME }} />
       <ErrorBanner message={error} />
       {data === null ? (
         <LoadingView />
       ) : (
         <>
           <View style={styles.hero}>
-            <Text style={styles.heroLabel}>Chiffre d’affaires du jour</Text>
+            <View style={styles.heroTop}>
+              <Text style={styles.heroLabel}>{t.revenueToday}</Text>
+              <View style={styles.heroDate}>
+                <Ionicons name="calendar-outline" size={14} color={colors.onPrimary} />
+                <Text style={styles.heroDateText}>{longDay(today)}</Text>
+              </View>
+            </View>
             <Text style={styles.heroValue}>{formatMoney(data.revenueToday)}</Text>
-            <Text style={styles.heroCaption}>{data.salesTodayCount} vente(s) aujourd’hui</Text>
+            <Text style={styles.heroCaption}>{t.salesToday(data.salesTodayCount)}</Text>
             <View style={styles.heroActions}>
               <View style={styles.heroAction}>
                 {/* Boutons clairs : un bouton « primary » se confondrait avec le bandeau. */}
-                <AppButton label="+ Vente" variant="secondary" onPress={() => router.push('/sales/new')} />
+                <AppButton label={common.tabs.sales} variant="secondary" onPress={() => router.push('/sales')} />
               </View>
               <View style={styles.heroAction}>
-                <AppButton label="+ Commande" variant="secondary" onPress={() => router.push('/orders/new')} />
+                <AppButton label={common.tabs.orders} variant="secondary" onPress={() => router.push('/orders')} />
               </View>
             </View>
           </View>
 
-          <ChipGroup accessibilityLabel="Période" options={PERIOD_OPTIONS} selected={period} onSelect={setPeriod} />
+          {/* Indicateurs de la période choisie : titre + dates exactes, puis choix de la période. */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeading}>{t.indicators}</Text>
+            <Text style={styles.sectionRange}>{periodRange}</Text>
+          </View>
+          <SegmentedControl accessibilityLabel={t.period} options={periodOptions} selected={period} onSelect={setPeriod} />
 
           <View style={styles.grid}>
             <StatCard
               basis={basis}
-              label="Chiffre d’affaires"
+              label={t.revenue}
               value={formatMoney(data.revenue)}
-              caption={`${data.salesCount} vente(s)`}
+              caption={t.salesCount(data.salesCount)}
             />
             <StatCard
               basis={basis}
-              label="Bénéfice brut"
+              label={t.grossProfit}
               value={formatMoney(data.grossProfit)}
-              caption="ventes − prix d’achat"
+              caption={t.grossProfitCaption}
               tone={data.grossProfit < 0 ? 'negative' : 'positive'}
             />
-            <StatCard basis={basis} label="Dépenses" value={formatMoney(data.expenses)} />
+            <StatCard basis={basis} label={t.expenses} value={formatMoney(data.expenses)} />
             <StatCard
               basis={basis}
-              label="Bénéfice net"
+              label={t.netProfit}
               value={formatMoney(data.netProfit)}
-              caption="brut − dépenses"
+              caption={t.netProfitCaption}
               tone={data.netProfit < 0 ? 'negative' : 'positive'}
             />
             <StatCard
               basis={basis}
-              label="Commandes"
+              label={t.orders}
               value={String(data.ordersCreated)}
-              caption={`${data.openOrders} en cours`}
+              caption={t.openOrders(data.openOrders)}
               tone={data.openOrders > 0 ? 'warning' : 'default'}
             />
             <StatCard
               basis={basis}
-              label="Stock faible"
+              label={t.lowStock}
               value={String(data.lowStockCount)}
-              caption="produit(s) à réapprovisionner"
+              caption={
+                data.productCount === 0
+                  ? t.noProductCaption
+                  : data.outOfStockCount > 0
+                    ? `${t.lowStockCaption}, ${t.lowStockCaptionOut(data.outOfStockCount)}`
+                    : t.lowStockCaption
+              }
               tone={data.lowStockCount > 0 ? 'warning' : 'default'}
             />
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Chiffre d’affaires · 7 derniers jours</Text>
-            <ColumnChart data={chartData} formatValue={formatMoney} />
+            <Text style={styles.cardTitle}>
+              {t.revenueChart} · {t.granularityRange[granularity](count)}
+            </Text>
+            {/* Filtre : découpage (segments), puis nombre de périodes (champ libre avec − / +). */}
+            <View style={styles.filter}>
+              <SegmentedControl
+                accessibilityLabel={t.revenueChart}
+                options={granularityOptions}
+                selected={granularity}
+                onSelect={setGranularity}
+              />
+              <View style={styles.countRow}>
+                <Text style={styles.countText}>{t.show}</Text>
+                <NumberStepper
+                  value={count}
+                  min={limits.min}
+                  max={limits.max}
+                  onChange={(value) => setCounts((previous) => ({ ...previous, [granularity]: value }))}
+                  accessibilityLabel={`${t.countLabel} (${t.range(limits.min, limits.max)})`}
+                  decrementLabel={t.fewer}
+                  incrementLabel={t.more}
+                />
+                <Text style={styles.countText}>{t.units[granularity]}</Text>
+              </View>
+            </View>
+            {/* key : le graphique repart sur la barre la plus récente à chaque changement de découpage. */}
+            <ColumnChart key={`${granularity}-${count}`} data={chartData} formatValue={formatMoney} />
           </View>
 
           {expenseData.length > 0 ? (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Dépenses par catégorie · {PERIOD_LABELS[period]}</Text>
+              <Text style={styles.cardTitle}>{t.expensesByCategory(common.period[period])}</Text>
               <BarList data={expenseData} formatValue={formatMoney} />
             </View>
           ) : null}
 
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Produits en stock faible</Text>
+              <Text style={styles.cardTitle}>{t.lowStockProducts}</Text>
               <Text accessibilityRole="link" onPress={() => router.push('/stock')} style={styles.link}>
-                Voir le stock
+                {t.seeStock}
               </Text>
             </View>
-            {data.lowStockProducts.length === 0 ? (
-              <Text style={styles.muted}>Tous les produits sont au-dessus de leur seuil d’alerte.</Text>
+            {/* Message exact : aucun produit n'est pas la même chose que « stock suffisant ». */}
+            {data.productCount === 0 ? (
+              <Text style={styles.muted}>{t.noProducts}</Text>
+            ) : data.lowStockProducts.length === 0 ? (
+              <Text style={styles.muted}>{t.allAboveThreshold(data.productCount)}</Text>
             ) : (
               data.lowStockProducts.map((product) => {
                 const available = availableQuantity(product);
@@ -187,7 +300,7 @@ export function DashboardScreen() {
                       {product.name}
                     </Text>
                     <Text style={[styles.stockQty, available === 0 && styles.stockOut]}>
-                      {available === 0 ? 'Rupture' : `${available} / seuil ${product.alertThreshold}`}
+                      {available === 0 ? t.outOfStock : t.stockOverThreshold(available, product.alertThreshold)}
                     </Text>
                   </Pressable>
                 );
@@ -195,16 +308,19 @@ export function DashboardScreen() {
             )}
           </View>
 
-          <Text style={styles.sectionTitle}>Modules</Text>
+          <Text style={styles.sectionTitle}>{t.quickAccess}</Text>
           <View style={styles.grid}>
             {MODULES.map((module) => (
               <Pressable
-                key={module.label}
+                key={module.key}
                 accessibilityRole="button"
                 onPress={() => router.push(module.href)}
                 style={({ pressed }) => [styles.tile, { flexBasis: width >= WIDE_LAYOUT ? '15%' : '30%' }, pressed && styles.tilePressed]}
               >
-                <Text style={styles.tileLabel}>{module.label}</Text>
+                <View style={styles.tileIcon}>
+                  <Ionicons name={module.icon} size={24} color={colors.primary} />
+                </View>
+                <Text style={styles.tileLabel}>{t.modules[module.key]}</Text>
               </Pressable>
             ))}
           </View>
@@ -215,12 +331,28 @@ export function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
+  filter: { gap: spacing.md, marginTop: spacing.sm, marginBottom: spacing.md },
+  countRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  countText: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
   contentWide: { maxWidth: 1100, width: '100%', alignSelf: 'center' },
-  headerLink: { color: colors.onPrimary, fontWeight: '600', fontSize: fontSize.md, paddingHorizontal: spacing.sm },
   hero: { padding: spacing.xl, borderRadius: radius.lg, backgroundColor: colors.primary },
-  heroLabel: { color: colors.primaryLight, fontSize: fontSize.md },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  heroLabel: { flexShrink: 1, color: colors.primaryLight, fontSize: fontSize.md, fontWeight: '600' },
+  heroDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  heroDateText: { color: colors.onPrimary, fontSize: fontSize.sm, fontWeight: '700' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm },
+  sectionHeading: { fontSize: fontSize.lg, fontWeight: '800', color: colors.text },
+  sectionRange: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textMuted },
   heroValue: { color: colors.onPrimary, fontSize: 34, fontWeight: '800', fontVariant: ['tabular-nums'] },
   heroCaption: { color: colors.primaryLight, fontSize: fontSize.sm },
   heroActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
@@ -257,5 +389,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
   },
   tilePressed: { opacity: 0.8 },
-  tileLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.primaryDark },
+  tileIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  tileLabel: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
 });
