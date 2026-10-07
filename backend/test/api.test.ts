@@ -60,6 +60,7 @@ const config: AppConfig = {
   adminToken: 'admin-jeton-de-test-0123',
   corsOrigins: ['http://localhost:8081'],
   legal: { businessName: 'Boutique <Rasoa>', contactEmail: 'contact@exemple.mg' },
+  apkUrl: 'https://expo.dev/artifacts/eas/test.apk',
   devTools: false,
 };
 
@@ -510,6 +511,13 @@ describe('API de l’application', () => {
     const deletion = await app.inject({ url: '/data-deletion' });
     assert.equal(deletion.statusCode, 200);
     assert.match(deletion.body, /Suppression de vos données/);
+  });
+
+  it('/apk redirige vers la dernière APK', async () => {
+    const { app } = setup();
+    const response = await app.inject({ url: '/apk' });
+    assert.equal(response.statusCode, 302);
+    assert.equal(response.headers['location'], 'https://expo.dev/artifacts/eas/test.apk');
   });
 
   it('autorise l’application web déclarée (CORS)', async () => {

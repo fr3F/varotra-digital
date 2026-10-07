@@ -30,6 +30,11 @@ export interface AppConfig {
   readonly corsOrigins: readonly string[];
   /** Nom et contact affichés sur les pages /privacy et /data-deletion (exigées par Meta). */
   readonly legal: { readonly businessName: string; readonly contactEmail: string | null };
+  /**
+   * Adresse de la dernière APK (lien EAS) : /apk y redirige, pour donner aux vendeurs un lien qui
+   * ne change pas d'une version à l'autre. Absente : /apk indique que l'application n'est pas disponible.
+   */
+  readonly apkUrl: string | null;
   /** Active les routes /dev (lecture des réponses envoyées, utile au simulateur). Jamais en production. */
   readonly devTools: boolean;
 }
@@ -69,6 +74,14 @@ function databasePath(env: NodeJS.ProcessEnv): string {
   return volume === null ? 'data/carnet-backend.db' : `${volume.replace(/\/+$/, '')}/carnet-backend.db`;
 }
 
+function apkUrl(env: NodeJS.ProcessEnv): string | null {
+  const value = optional(env, 'APK_URL');
+  if (value !== null && !/^https:\/\/\S+$/.test(value)) {
+    throw new ConfigError('Variable APK_URL : adresse https:// attendue.');
+  }
+  return value;
+}
+
 function adminToken(env: NodeJS.ProcessEnv): string | null {
   const value = optional(env, 'ADMIN_TOKEN');
   if (value !== null && value.length < 16) {
@@ -104,6 +117,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       businessName: optional(env, 'BUSINESS_NAME') ?? 'Carnet Digital',
       contactEmail: optional(env, 'CONTACT_EMAIL'),
     },
+    apkUrl: apkUrl(env),
     devTools: env['DEV_TOOLS'] === 'true',
   };
 }

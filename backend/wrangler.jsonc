@@ -21,7 +21,10 @@
     "BUSINESS_NAME": "Carnet Digital",
     "CONTACT_EMAIL": "",
     "CORS_ORIGINS": "",
-    "DEV_TOOLS": "false"
+    "DEV_TOOLS": "false",
+    // Dernière APK (lien « Download » du build EAS) : https://…workers.dev/apk y redirige.
+    // À mettre à jour à chaque nouvelle APK, puis npm run deploy. Vide : /apk répond « pas disponible ».
+    "APK_URL": ""
   },
   "d1_databases": [
     {
