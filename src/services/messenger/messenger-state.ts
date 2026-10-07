@@ -15,6 +15,7 @@ export const messengerStore = createStore<MessengerState>({
   notifyCustomer: true,
   pushActive: false,
   deliveryFee: DEFAULT_DELIVERY_FEE,
+  shop: null,
 });
 
 /**

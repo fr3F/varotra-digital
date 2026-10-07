@@ -21,7 +21,7 @@ const WRANGLER_CONFIG = join(ROOT, 'wrangler.jsonc');
 const SECRETS_FILE = join(ROOT, '.cloudflare-secrets.json');
 const DATABASE_NAME = 'carnet-backend';
 
-const SECRET_KEYS = ['META_APP_SECRET', 'META_VERIFY_TOKEN', 'APP_PAIRING_CODE', 'META_PAGE_ACCESS_TOKEN'] as const;
+const SECRET_KEYS = ['META_APP_SECRET', 'META_VERIFY_TOKEN', 'APP_PAIRING_CODE', 'META_PAGE_ACCESS_TOKEN', 'ADMIN_TOKEN'] as const;
 type Secrets = Record<(typeof SECRET_KEYS)[number], string>;
 
 function step(message: string): void {
@@ -77,6 +77,8 @@ function loadSecrets(): Secrets {
     META_VERIFY_TOKEN: stored.META_VERIFY_TOKEN ?? randomBytes(24).toString('hex'),
     APP_PAIRING_CODE: stored.APP_PAIRING_CODE ?? randomBytes(5).toString('hex').toUpperCase(),
     META_PAGE_ACCESS_TOKEN: stored.META_PAGE_ACCESS_TOKEN ?? '',
+    // Page /admin : boutiques, codes d'activation, abonnements.
+    ADMIN_TOKEN: stored.ADMIN_TOKEN ?? randomBytes(24).toString('hex'),
   };
   writeFileSync(SECRETS_FILE, `${JSON.stringify(secrets, null, 2)}\n`);
   return secrets;
@@ -140,6 +142,8 @@ async function main(): Promise<void> {
  Backend déployé sur Cloudflare.
  Adresse du serveur (application)  : ${base}
  Code d'appairage (application)    : ${secrets.APP_PAIRING_CODE}
+ Administration (boutiques, codes) : ${base}/admin  (jeton : ADMIN_TOKEN dans ${SECRETS_FILE})
+ Retour Facebook Login (Meta)      : ${base}/connect/facebook/callback
  URL du webhook (Meta)             : ${base}/webhooks/messenger
  Jeton de vérification (Meta)      : ${secrets.META_VERIFY_TOKEN}
  Confidentialité (Meta)            : ${base}/privacy

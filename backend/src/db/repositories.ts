@@ -167,23 +167,28 @@ export interface Conversation {
   readonly lastCustomerMessageAt: string | null;
 }
 
-export function createRepositories(db: SqlDb) {
+/** Données d'une boutique : chaque requête est limitée à `shopId`. */
+export function createRepositories(db: SqlDb, shopId: string) {
   return {
     catalog: {
       /** Remplace tout le catalogue par celui envoyé par l'application (atomique). */
       async replaceAll(products: readonly CatalogProduct[]): Promise<void> {
         const timestamp = now();
         await db.batch([
-          { sql: 'DELETE FROM catalog_products', params: [] },
+          { sql: 'DELETE FROM catalog_products WHERE shop_id = ?', params: [shopId] },
           ...products.map((p) => ({
-            sql: `INSERT INTO catalog_products (id, name, sku, unit_price, available, description, updated_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            params: [p.id, p.name, p.sku, p.unitPrice, p.available, p.description, timestamp],
+            // Un même identifiant de produit ne peut appartenir qu'à une boutique (clé primaire).
+            sql: `INSERT INTO catalog_products (id, shop_id, name, sku, unit_price, available, description, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  ON CONFLICT (id) DO UPDATE SET shop_id = excluded.shop_id, name = excluded.name, sku = excluded.sku,
+                    unit_price = excluded.unit_price, available = excluded.available,
+                    description = excluded.description, updated_at = excluded.updated_at`,
+            params: [p.id, shopId, p.name, p.sku, p.unitPrice, p.available, p.description, timestamp],
           })),
         ]);
       },
       async findAll(): Promise<CatalogProduct[]> {
-        const rows = await db.all('SELECT * FROM catalog_products ORDER BY name COLLATE NOCASE');
+        const rows = await db.all('SELECT * FROM catalog_products WHERE shop_id = ? ORDER BY name COLLATE NOCASE', [shopId]);
         return rows.map((row) => ({
           id: readString(row, 'id'),
           name: readString(row, 'name'),
@@ -198,22 +203,22 @@ export function createRepositories(db: SqlDb) {
     settings: {
       /** Frais de livraison dans Antananarivo (Ariary) : réglé depuis l'application, 3 000 Ar sinon. */
       async deliveryFee(): Promise<number> {
-        const row = await db.first('SELECT value FROM settings WHERE key = ?', [DELIVERY_FEE_KEY]);
+        const row = await db.first('SELECT value FROM settings WHERE shop_id = ? AND key = ?', [shopId, DELIVERY_FEE_KEY]);
         const fee = row === null ? Number.NaN : Number(readString(row, 'value'));
         return Number.isInteger(fee) && fee >= 0 ? fee : DEFAULT_DELIVERY_FEE;
       },
       async setDeliveryFee(fee: number): Promise<void> {
         await db.run(
-          `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
-           ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-          [DELIVERY_FEE_KEY, String(fee), now()],
+          `INSERT INTO settings (shop_id, key, value, updated_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT (shop_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+          [shopId, DELIVERY_FEE_KEY, String(fee), now()],
         );
       },
     },
 
     conversations: {
       async find(psid: string): Promise<Conversation | null> {
-        const row = await db.first('SELECT * FROM conversations WHERE psid = ?', [psid]);
+        const row = await db.first('SELECT * FROM conversations WHERE shop_id = ? AND psid = ?', [shopId, psid]);
         return row === null
           ? null
           : {
@@ -226,9 +231,9 @@ export function createRepositories(db: SqlDb) {
       /** Conversations dont le dernier message client date de [from, to] et pas encore relancées depuis. */
       async findReminderCandidates(from: string, to: string): Promise<Conversation[]> {
         const rows = await db.all(
-          `SELECT * FROM conversations WHERE last_customer_message_at BETWEEN ? AND ?
+          `SELECT * FROM conversations WHERE shop_id = ? AND last_customer_message_at BETWEEN ? AND ?
              AND (reminded_at IS NULL OR reminded_at < last_customer_message_at)`,
-          [from, to],
+          [shopId, from, to],
         );
         return rows.map((row) => ({
           psid: readString(row, 'psid'),
@@ -238,16 +243,17 @@ export function createRepositories(db: SqlDb) {
         }));
       },
       async markReminded(psid: string, at: string): Promise<void> {
-        await db.run('UPDATE conversations SET reminded_at = ? WHERE psid = ?', [at, psid]);
+        await db.run('UPDATE conversations SET reminded_at = ? WHERE shop_id = ? AND psid = ?', [at, shopId, psid]);
       },
       async save(conversation: Conversation): Promise<void> {
         await db.run(
-          `INSERT INTO conversations (psid, customer_name, state_json, last_customer_message_at, updated_at)
-           VALUES (?, ?, ?, ?, ?)
+          `INSERT INTO conversations (psid, shop_id, customer_name, state_json, last_customer_message_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT (psid) DO UPDATE SET customer_name = excluded.customer_name, state_json = excluded.state_json,
              last_customer_message_at = excluded.last_customer_message_at, updated_at = excluded.updated_at`,
           [
             conversation.psid,
+            shopId,
             conversation.customerName,
             JSON.stringify(conversation.state),
             conversation.lastCustomerMessageAt,
@@ -261,9 +267,9 @@ export function createRepositories(db: SqlDb) {
       /** Enregistre l'événement ; false s'il a déjà été reçu (renvoi du webhook par Meta). */
       async register(eventId: string, psid: string, kind: string, content: string | null): Promise<boolean> {
         const result = await db.run(
-          `INSERT INTO inbound_events (event_id, psid, kind, content, received_at)
-           VALUES (?, ?, ?, ?, ?) ON CONFLICT (event_id) DO NOTHING`,
-          [eventId, psid, kind, content, now()],
+          `INSERT INTO inbound_events (event_id, shop_id, psid, kind, content, received_at)
+           VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (event_id) DO NOTHING`,
+          [eventId, shopId, psid, kind, content, now()],
         );
         return result.changes === 1;
       },
@@ -284,15 +290,19 @@ export function createRepositories(db: SqlDb) {
       }): Promise<OrderDraft> {
         const createdAt = new Date();
         const prefix = dayPrefix('MSG', createdAt);
-        const countRow = await db.first('SELECT COUNT(*) AS total FROM order_drafts WHERE reference LIKE ?', [`${prefix}%`]);
+        const countRow = await db.first('SELECT COUNT(*) AS total FROM order_drafts WHERE shop_id = ? AND reference LIKE ?', [
+          shopId,
+          `${prefix}%`,
+        ]);
         const count = countRow === null ? 0 : readNumber(countRow, 'total');
         const id = randomUUID();
         await db.run(
-          `INSERT INTO order_drafts (id, reference, psid, customer_name, mode, items_json, raw_text, needs_review, created_at,
-             phone, address, delivery_zone, delivery_fee)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO order_drafts (id, shop_id, reference, psid, customer_name, mode, items_json, raw_text, needs_review,
+             created_at, phone, address, delivery_zone, delivery_fee)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
+            shopId,
             `${prefix}${String(count + 1).padStart(3, '0')}`,
             input.psid,
             input.customerName,
@@ -316,7 +326,7 @@ export function createRepositories(db: SqlDb) {
       /** Commandes pas encore confirmées comme reçues par l'application. */
       /** Produits les plus commandés sur Messenger depuis `since` (quantités cumulées), du plus au moins demandé. */
       async popularProductIds(since: string, limit: number): Promise<string[]> {
-        const rows = await db.all('SELECT items_json FROM order_drafts WHERE created_at >= ?', [since]);
+        const rows = await db.all('SELECT items_json FROM order_drafts WHERE shop_id = ? AND created_at >= ?', [shopId, since]);
         const totals = new Map<string, number>();
         for (const row of rows) {
           for (const item of parseItems(readString(row, 'items_json'))) {
@@ -326,35 +336,46 @@ export function createRepositories(db: SqlDb) {
         return [...totals].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([id]) => id);
       },
       async findPending(): Promise<OrderDraft[]> {
-        const rows = await db.all('SELECT * FROM order_drafts WHERE delivered_at IS NULL ORDER BY created_at ASC');
+        const rows = await db.all('SELECT * FROM order_drafts WHERE shop_id = ? AND delivered_at IS NULL ORDER BY created_at ASC', [
+          shopId,
+        ]);
         return rows.map(toDraft);
       },
       async findById(id: string): Promise<OrderDraft | null> {
-        const row = await db.first('SELECT * FROM order_drafts WHERE id = ?', [id]);
+        const row = await db.first('SELECT * FROM order_drafts WHERE shop_id = ? AND id = ?', [shopId, id]);
         return row === null ? null : toDraft(row);
       },
       /** Dernière commande du client (réponse à « statut ? »). */
       /** Produits déjà commandés par ce client, du plus récent au plus ancien (sans doublon). */
       async productIdsOrderedBy(psid: string): Promise<string[]> {
-        const rows = await db.all('SELECT items_json FROM order_drafts WHERE psid = ? ORDER BY created_at DESC LIMIT 20', [psid]);
+        const rows = await db.all(
+          'SELECT items_json FROM order_drafts WHERE shop_id = ? AND psid = ? ORDER BY created_at DESC LIMIT 20',
+          [shopId, psid],
+        );
         const ids = rows.flatMap((row) => parseItems(readString(row, 'items_json')).map((item) => item.productId));
         return [...new Set(ids)];
       },
       async findLatestByPsid(psid: string): Promise<OrderDraft | null> {
-        const row = await db.first('SELECT * FROM order_drafts WHERE psid = ? ORDER BY created_at DESC LIMIT 1', [psid]);
+        const row = await db.first(
+          'SELECT * FROM order_drafts WHERE shop_id = ? AND psid = ? ORDER BY created_at DESC LIMIT 1',
+          [shopId, psid],
+        );
         return row === null ? null : toDraft(row);
       },
       async setCustomerStatus(id: string, status: CustomerOrderStatus): Promise<void> {
-        await db.run('UPDATE order_drafts SET customer_status = ?, customer_status_at = ? WHERE id = ?', [
+        await db.run('UPDATE order_drafts SET customer_status = ?, customer_status_at = ? WHERE shop_id = ? AND id = ?', [
           status,
           now(),
+          shopId,
           id,
         ]);
       },
       /** Marque les commandes comme récupérées par l'application ; renvoie le nombre réellement marqué. */
       async markDelivered(ids: readonly string[]): Promise<number> {
         const pending = await Promise.all(
-          ids.map((id) => db.first('SELECT id FROM order_drafts WHERE id = ? AND delivered_at IS NULL', [id])),
+          ids.map((id) =>
+            db.first('SELECT id FROM order_drafts WHERE shop_id = ? AND id = ? AND delivered_at IS NULL', [shopId, id]),
+          ),
         );
         const toMark = ids.filter((_, index) => pending[index] !== null);
         const timestamp = now();
@@ -369,34 +390,28 @@ export function createRepositories(db: SqlDb) {
       async create(name: string): Promise<{ id: string; token: string }> {
         const id = randomUUID();
         const token = `${randomUUID()}${randomUUID()}`.replace(/-/g, '');
-        await db.run('INSERT INTO devices (id, name, token_hash, created_at) VALUES (?, ?, ?, ?)', [
+        await db.run('INSERT INTO devices (id, shop_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?)', [
           id,
+          shopId,
           name,
           hashToken(token),
           now(),
         ]);
         return { id, token };
       },
-      /** Appareil actif correspondant au jeton, ou null. Met à jour la date de dernière activité. */
-      async authenticate(token: string): Promise<string | null> {
-        const row = await db.first('SELECT id FROM devices WHERE token_hash = ? AND revoked_at IS NULL', [hashToken(token)]);
-        if (row === null) {
-          return null;
-        }
-        const id = readString(row, 'id');
-        await db.run('UPDATE devices SET last_seen_at = ? WHERE id = ?', [now(), id]);
-        return id;
-      },
       async revoke(id: string): Promise<void> {
-        await db.run('UPDATE devices SET revoked_at = ?, push_token = NULL WHERE id = ?', [now(), id]);
+        await db.run('UPDATE devices SET revoked_at = ?, push_token = NULL WHERE shop_id = ? AND id = ?', [now(), shopId, id]);
       },
       /** Jeton Expo Push de l'appareil (null : ne plus envoyer de notification). */
       async setPushToken(id: string, pushToken: string | null): Promise<void> {
-        await db.run('UPDATE devices SET push_token = ? WHERE id = ?', [pushToken, id]);
+        await db.run('UPDATE devices SET push_token = ? WHERE shop_id = ? AND id = ?', [pushToken, shopId, id]);
       },
       /** Appareils actifs qui acceptent les notifications push. */
       async findPushTargets(): Promise<{ id: string; pushToken: string }[]> {
-        const rows = await db.all('SELECT id, push_token FROM devices WHERE revoked_at IS NULL AND push_token IS NOT NULL');
+        const rows = await db.all(
+          'SELECT id, push_token FROM devices WHERE shop_id = ? AND revoked_at IS NULL AND push_token IS NOT NULL',
+          [shopId],
+        );
         return rows.map((row) => ({ id: readString(row, 'id'), pushToken: readString(row, 'push_token') }));
       },
     },
@@ -412,9 +427,10 @@ export function createRepositories(db: SqlDb) {
         kind?: MessageKind;
       }): Promise<void> {
         await db.run(
-          `INSERT INTO outgoing_messages (psid, text, quick_replies_json, created_at, status, error, draft_id, kind)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO outgoing_messages (shop_id, psid, text, quick_replies_json, created_at, status, error, draft_id, kind)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
+            shopId,
             entry.psid,
             entry.text,
             entry.quickReplies === undefined ? null : JSON.stringify(entry.quickReplies),
@@ -428,14 +444,18 @@ export function createRepositories(db: SqlDb) {
       },
       /** Historique des réponses liées à une commande, de la plus ancienne à la plus récente. */
       async findByDraft(draftId: string): Promise<ReplyRecord[]> {
-        const rows = await db.all('SELECT * FROM outgoing_messages WHERE draft_id = ? ORDER BY id ASC', [draftId]);
+        const rows = await db.all('SELECT * FROM outgoing_messages WHERE shop_id = ? AND draft_id = ? ORDER BY id ASC', [
+          shopId,
+          draftId,
+        ]);
         return rows.map(toReply);
       },
       async findRecent(
         psid: string,
         afterId: number,
       ): Promise<{ id: number; text: string; quickReplies: string[]; status: string }[]> {
-        const rows = await db.all('SELECT * FROM outgoing_messages WHERE psid = ? AND id > ? ORDER BY id ASC', [
+        const rows = await db.all('SELECT * FROM outgoing_messages WHERE shop_id = ? AND psid = ? AND id > ? ORDER BY id ASC', [
+          shopId,
           psid,
           afterId,
         ]);

@@ -85,6 +85,18 @@ export interface CustomerReplyEntry {
 }
 
 /** État de la liaison avec le backend Messenger. */
+/** Boutique de ce téléphone sur le serveur : Page Facebook reliée et abonnement. */
+export interface ShopInfo {
+  readonly name: string;
+  readonly pageName: string | null;
+  readonly pageLinked: boolean;
+  readonly expiresAt: IsoDateString;
+  /** Abonnement en cours et boutique non suspendue. */
+  readonly active: boolean;
+  /** « Se connecter avec Facebook » disponible sur ce serveur. */
+  readonly facebookLogin: boolean;
+}
+
 export interface MessengerState {
   readonly connected: boolean;
   readonly backendUrl: string | null;
@@ -105,6 +117,8 @@ export interface MessengerState {
   readonly pushActive: boolean;
   /** Frais de livraison dans Antananarivo annoncés par le bot. */
   readonly deliveryFee: Money;
+  /** Boutique sur le serveur (null : pas encore lue). */
+  readonly shop: ShopInfo | null;
 }
 
 export interface SyncReport {

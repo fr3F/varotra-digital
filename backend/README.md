@@ -98,8 +98,34 @@ npm run worker:dev            # http://localhost:8787
   Les *utility templates* de Meta pourraient lever cette limite plus tard.
 - **Nom du client** : lu via l'API de profil Meta si l'autorisation le permet, sinon « Client Messenger ».
 - **Pièces jointes** (photos, vocaux) : non lues ; le client est invité à écrire.
-- **Un seul vendeur** par serveur (un code d'appairage, plusieurs téléphones possibles).
 - En local, `node:sqlite` est encore signalé « expérimental » par Node 24 (avertissement sans effet) ; en production, la base est D1.
+
+## Plusieurs boutiques (vendre l'application)
+
+Un seul serveur sert toutes les boutiques : la même APK pour tout le monde, une Page Facebook par boutique.
+
+1. **Vous** ouvrez `https://…workers.dev/admin` (jeton `ADMIN_TOKEN`), créez la boutique et sa durée
+   (1, 3, 6 ou 12 mois) : un **code d'activation** `KD-XXXX-XXXX` s'affiche ; remettez-le au client après paiement.
+2. **Le client** installe l'APK, saisit le code dans Réglages › Messenger, puis touche
+   « Se connecter avec Facebook » : il se connecte, choisit sa Page, revient dans l'application.
+3. Le serveur garde le jeton de sa Page, abonne la Page au webhook et range chaque message dans
+   la bonne boutique (catalogue, conversations, commandes, frais de livraison séparés).
+4. Abonnement fini ou boutique suspendue (`/admin`) : le bot se tait et l'application affiche
+   « Abonnement terminé » ; « +1 mois » la réactive.
+
+La boutique `default` reprend les données d'avant (ancien code d'appairage `APP_PAIRING_CODE` et
+`META_PAGE_ACCESS_TOKEN`) : elle adopte la première Page qui écrit au serveur.
+
+### Réglages Meta (une fois)
+
+- `META_APP_ID` (wrangler.jsonc › vars) : identifiant de l'application Meta.
+- Produit **Facebook Login for Business** › URI de redirection OAuth valide :
+  `https://…workers.dev/connect/facebook/callback`.
+- Webhook Messenger de l'application (objet `page`, champs `messages`, `messaging_postbacks`) :
+  `https://…workers.dev/webhooks/messenger` ; chaque Page reliée s'y abonne automatiquement.
+- **App Review** : `pages_messaging`, `pages_show_list`, `pages_manage_metadata` en accès avancé,
+  et vérification de l'entreprise. Sans elles, seuls les comptes ajoutés comme testeurs de
+  l'application Meta peuvent se connecter.
 
 ## Sécurité
 

@@ -6,26 +6,17 @@ import { serve } from '@hono/node-server';
 import { buildApp, createScheduledJobs } from './app.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { openNodeDatabase } from './db/node-sqlite.ts';
-import { createRepositories } from './db/repositories.ts';
-import { createGraphMessengerClient, createSimulatedMessengerClient } from './messenger/messenger-client.ts';
 import { createTaskQueue } from './messenger/messenger-service.ts';
 
 function main(): void {
   const config = loadConfig();
   const db = openNodeDatabase(config.databasePath);
-  const messengerClient =
-    config.meta.pageAccessToken === null
-      ? createSimulatedMessengerClient()
-      : createGraphMessengerClient(config.meta.pageAccessToken, config.meta.graphApiVersion, {
-          buttonStyle: config.meta.buttonStyle,
-        });
   const queue = createTaskQueue();
   const log = (level: string) => (message: string) => console.log(`[${new Date().toISOString()}] ${level} ${message}`);
 
   const deps = {
     config,
-    repos: createRepositories(db),
-    messengerClient,
+    db,
     defer: (_c: unknown, task: () => Promise<void>) => queue.push(task),
     logger: { info: log('INFO'), error: log('ERREUR') },
   };
@@ -34,8 +25,9 @@ function main(): void {
   const jobs = createScheduledJobs(deps);
   const timer = setInterval(() => queue.push(() => jobs.run()), 30 * 60 * 1000);
 
-  if (!messengerClient.live) {
-    console.warn('META_PAGE_ACCESS_TOKEN absent : mode simulation, aucune réponse n’est envoyée à Meta.');
+  const live = config.meta.pageAccessToken !== null || config.meta.appId !== null;
+  if (!live) {
+    console.warn('Ni META_PAGE_ACCESS_TOKEN ni META_APP_ID : mode simulation, aucune réponse n’est envoyée à Meta.');
   }
   if (config.devTools) {
     console.warn('DEV_TOOLS=true : routes /dev actives. À désactiver en production.');
@@ -46,7 +38,7 @@ function main(): void {
     // Le serveur tourne tant que la fenêtre reste ouverte : il n'y a pas de « fin » à attendre.
     console.log(`
 ============================================================
- ✅ Serveur LOCAL démarré : ${url}  (${messengerClient.live ? 'Messenger réel' : 'simulation'})
+ ✅ Serveur LOCAL démarré : ${url}  (${live ? 'Messenger réel' : 'simulation'})
     Il tourne tant que cette fenêtre reste ouverte : c'est normal.
     Arrêter : Ctrl + C
 
