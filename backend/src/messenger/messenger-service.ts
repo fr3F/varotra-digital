@@ -81,6 +81,7 @@ export function createMessengerService(deps: {
           popularIds: await repos.drafts.popularProductIds(popularitySince(), POPULAR_COUNT),
           lastOrderItems: latest?.items ?? [],
           customerProductIds: await repos.drafts.productIdsOrderedBy(event.psid),
+          deliveryFee: await repos.settings.deliveryFee(),
         });
         const nextState = { ...result.state, choices: choicesOf(result.replies) };
         await repos.conversations.save({ psid: event.psid, customerName, state: nextState, lastCustomerMessageAt });

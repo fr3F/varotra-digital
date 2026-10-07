@@ -10,6 +10,18 @@ export interface RemoteOrderItem {
 
 export type RemoteOrderMode = 'GUIDED' | 'TEXT' | 'RAW';
 
+/** TANA : frais fixe annoncé au client ; OTHER : hors d'Antananarivo, frais à convenir par téléphone. */
+export type DeliveryZone = 'TANA' | 'OTHER';
+
+/** Coordonnées données au bot par le client avant l'enregistrement de sa commande. */
+export interface RemoteDelivery {
+  readonly phone: string;
+  readonly address: string;
+  readonly zone: DeliveryZone;
+  /** Frais annoncés au client, ou null s'ils sont à convenir. */
+  readonly fee: Money | null;
+}
+
 /** Commande Messenger en attente d'import. */
 export interface RemoteOrder {
   /** Identifiant côté backend : devient orders.external_ref. */
@@ -21,6 +33,8 @@ export interface RemoteOrder {
   readonly rawText: string | null;
   readonly needsReview: boolean;
   readonly receivedAt: IsoDateString;
+  /** null : message transmis tel quel, ou commande d'avant la demande des coordonnées. */
+  readonly delivery: RemoteDelivery | null;
 }
 
 /**
@@ -95,6 +109,8 @@ export interface MessengerState {
   readonly notifyCustomer: boolean;
   /** Le serveur envoie une notification push à chaque nouvelle commande (APK uniquement). */
   readonly pushActive: boolean;
+  /** Frais de livraison dans Antananarivo annoncés par le bot. */
+  readonly deliveryFee: Money;
 }
 
 export interface SyncReport {

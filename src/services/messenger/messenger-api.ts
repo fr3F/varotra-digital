@@ -1,5 +1,12 @@
 import { AppError } from '@/core/errors/app-error';
-import { CustomerReplyKind, CustomerReplyResult, RemoteOrder, RemoteOrderItem, UnavailableItem } from '@/models';
+import {
+  CustomerReplyKind,
+  CustomerReplyResult,
+  RemoteDelivery,
+  RemoteOrder,
+  RemoteOrderItem,
+  UnavailableItem,
+} from '@/models';
 
 /** Erreur réseau ou serveur lors d'un échange avec le backend Messenger. */
 export class MessengerApiError extends AppError {
@@ -79,7 +86,22 @@ export function parseRemoteOrder(value: unknown): RemoteOrder | null {
     rawText: str(value['rawText']),
     needsReview: value['needsReview'] === true,
     receivedAt,
+    delivery: parseDelivery(value['delivery']),
   };
+}
+
+/** Coordonnées de livraison ; null si absentes ou mal formées (la commande reste importable). */
+function parseDelivery(value: unknown): RemoteDelivery | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const phone = str(value['phone']);
+  const address = str(value['address']);
+  const zone = value['zone'];
+  if (phone === null || address === null || (zone !== 'TANA' && zone !== 'OTHER')) {
+    return null;
+  }
+  return { phone, address, zone, fee: num(value['fee']) };
 }
 
 /** Normalise l'adresse saisie (sans « / » final). */
@@ -135,6 +157,11 @@ export const messengerApi = {
   /** Jeton Expo Push du téléphone (null : plus de notification push). */
   async setPushToken(baseUrl: string, token: string, pushToken: string | null): Promise<void> {
     await request(baseUrl, '/v1/devices/push-token', { method: 'PUT', body: JSON.stringify({ pushToken }), token });
+  },
+
+  /** Frais de livraison dans Antananarivo annoncés par le bot. */
+  async setDeliveryFee(baseUrl: string, token: string, deliveryFee: number): Promise<void> {
+    await request(baseUrl, '/v1/settings', { method: 'PUT', body: JSON.stringify({ deliveryFee }), token });
   },
 
   async pushCatalog(baseUrl: string, token: string, products: readonly CatalogEntry[]): Promise<void> {

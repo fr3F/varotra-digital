@@ -162,13 +162,21 @@ describe('webhook Meta', () => {
     // 3 savons demandés pour 2 en stock : pas de « Valider », le client ajuste son panier.
     await postWebhook(ctx.app, webhook('u1', 'm2', { text: 'Ajuster', quick_reply: { payload: 'ADJUST' } }));
     await postWebhook(ctx.app, webhook('u1', 'm3', { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('u1', 'm3-tel', { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook('u1', 'm3-adr', { text: 'Analakely, Antananarivo' }));
     await ctx.queue.idle();
 
-    assert.equal(ctx.sent.length, 3, 'panier, panier ajusté, confirmation');
+    assert.equal(ctx.sent.length, 5, 'panier, panier ajusté, téléphone ?, adresse ?, confirmation');
     assert.match(ctx.sent[0]?.text ?? '', /⚠️ seulement 2 en stock/);
     assert.ok(!ctx.sent[0]?.quickReplies?.some((reply) => reply.payload === 'CHECKOUT'));
     assert.match(ctx.sent[1]?.text ?? '', /2 × Savon Nosy/);
-    assert.match(ctx.sent[2]?.text ?? '', /Commande reçue ✅ \(réf\. MSG-\d{8}-001\)/);
+    assert.match(ctx.sent[2]?.text ?? '', /numéro de téléphone/);
+    assert.match(ctx.sent[3]?.text ?? '', /Où faut-il livrer/);
+    // Dans Antananarivo : frais fixe (3 000 Ar par défaut) ajouté au total.
+    assert.match(
+      ctx.sent[4]?.text ?? '',
+      /Commande reçue ✅ \(réf\. MSG-\d{8}-001\)[\s\S]*📞 034 12 345 67\n📍 Analakely, Antananarivo\n🚚 Livraison \(Antananarivo\) : 3\s000\sAr\nTotal : 25\s000\sAr/,
+    );
 
     const pending = await ctx.app.inject({ url: '/v1/orders/pending', headers: auth });
     const { orders } = pending.json<{ orders: { id: string; needsReview: boolean; customer: { name: string }; items: unknown[] }[] }>();
@@ -176,6 +184,12 @@ describe('webhook Meta', () => {
     assert.equal(orders[0]?.customer.name, 'Rasoa Be');
     assert.equal(orders[0]?.items.length, 2);
     assert.equal(orders[0]?.needsReview, false, 'panier ajusté au stock');
+    assert.deepEqual((orders[0] as unknown as { delivery: unknown }).delivery, {
+      phone: '034 12 345 67',
+      address: 'Analakely, Antananarivo',
+      zone: 'TANA',
+      fee: 3000,
+    });
 
     const id = orders[0]?.id ?? '';
     const ack = await ctx.app.inject({ method: 'POST', url: '/v1/orders/ack', headers: auth, payload: { ids: [id] } });
@@ -206,6 +220,8 @@ describe('webhook Meta', () => {
     await postWebhook(ctx.app, body);
     await postWebhook(ctx.app, webhook('u2', 'x2', { text: '1', quick_reply: { payload: 'QTY:1' } }));
     await postWebhook(ctx.app, webhook('u2', 'x3', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('u2', 'x3-tel', { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook('u2', 'x3-adr', { text: 'Analakely, Antananarivo' }));
     await ctx.queue.idle();
     const { orders } = (await ctx.app.inject({ url: '/v1/orders/pending', headers: auth })).json<{ orders: { id: string }[] }>();
 
@@ -236,6 +252,8 @@ describe('réponse automatique Facebook', () => {
     await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
     await postWebhook(ctx.app, webhook(psid, `${psid}-1`, { text }));
     await postWebhook(ctx.app, webhook(psid, `${psid}-2`, { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2-tel`, { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2-adr`, { text: 'Analakely, Antananarivo' }));
     await ctx.queue.idle();
     const pending = (await ctx.app.inject({ url: '/v1/orders/pending', headers: auth })).json<{ orders: { id: string }[] }>();
     return { auth, id: pending.orders[0]?.id ?? '' };
@@ -272,6 +290,18 @@ describe('réponse automatique Facebook', () => {
       history.replies.map((reply) => `${reply.kind}:${reply.status}`),
       ['RECEIPT:SENT', 'UNAVAILABLE:SENT'],
     );
+  });
+
+  it('frais de livraison réglés depuis l’application', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    const refused = await ctx.app.inject({ method: 'PUT', url: '/v1/settings', headers: auth, payload: { deliveryFee: -1 } });
+    assert.equal(refused.statusCode, 400);
+    const saved = await ctx.app.inject({ method: 'PUT', url: '/v1/settings', headers: auth, payload: { deliveryFee: 4000 } });
+    assert.deepEqual(saved.json(), { deliveryFee: 4000 });
+
+    await orderFrom(ctx, 'f1', '1 savon');
+    assert.match(ctx.sent.at(-1)?.text ?? '', /🚚 Livraison \(Antananarivo\) : 4\s000\sAr\nTotal : 5\s500\sAr/);
   });
 
   it('le client demande « statut ? » : réponse avec sa dernière commande', async () => {
@@ -319,6 +349,8 @@ describe('relance des paniers abandonnés', () => {
     await postWebhook(ctx.app, webhook('r1', 'r1-1', { text: 'Salama, mila huile tiko roa' }));
     await postWebhook(ctx.app, webhook('r2', 'r2-1', { text: '1 huile' }));
     await postWebhook(ctx.app, webhook('r2', 'r2-2', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('r2', 'r2-2-tel', { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook('r2', 'r2-2-adr', { text: 'Analakely, Antananarivo' }));
     await ctx.queue.idle();
     const before = ctx.sent.length;
 
@@ -341,6 +373,8 @@ describe('relance des paniers abandonnés', () => {
     await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
     await postWebhook(ctx.app, webhook('p1', 'p1-1', { text: '2 savon' }));
     await postWebhook(ctx.app, webhook('p1', 'p1-2', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('p1', 'p1-2-tel', { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook('p1', 'p1-2-adr', { text: 'Analakely, Antananarivo' }));
     await postWebhook(ctx.app, webhook('p2', 'p2-1', { text: 'menu' }));
     await ctx.queue.idle();
     assert.match(ctx.sent.at(-1)?.text ?? '', /• Savon Nosy — 1\D500\sAr ⭐ 🔥 plus que 2\n• Huile/);
@@ -353,6 +387,8 @@ describe('notifications push (nouvelle commande)', () => {
   async function order(ctx: ReturnType<typeof setup>, psid: string): Promise<void> {
     await postWebhook(ctx.app, webhook(psid, `${psid}-1`, { text: '2 huile tiko' }));
     await postWebhook(ctx.app, webhook(psid, `${psid}-2`, { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2-tel`, { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2-adr`, { text: 'Analakely, Antananarivo' }));
     await ctx.queue.idle();
   }
 

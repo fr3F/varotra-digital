@@ -1,7 +1,8 @@
 import { database } from '@/database/database';
 import { clientRepository } from '@/database/repositories/client.repository';
 import { productRepository } from '@/database/repositories/product.repository';
-import { Client, Order, OrderLineDraft, RemoteOrder } from '@/models';
+import { Client, Order, OrderLineDraft, RemoteDelivery, RemoteOrder } from '@/models';
+import { formatMoney } from '@/utils/money.utils';
 import { orderService } from '../order.service';
 import { stockService } from '../stock.service';
 import { facebookReplyService } from './facebook-reply.service';
@@ -34,16 +35,39 @@ async function autoReply(order: Order, lines: readonly OrderLineDraft[]): Promis
   await facebookReplyService.queue(order, 'UNAVAILABLE', { automatic: true, unavailable });
 }
 
-/** Retrouve (ou crée, ou restaure) le client à partir de son identifiant Messenger. */
+/** Ligne de la note de commande : où livrer et à quel prix. */
+function deliveryNote(delivery: RemoteDelivery): string {
+  const fee =
+    delivery.fee === null
+      ? 'hors Antananarivo : frais à convenir, appeler le client'
+      : `Antananarivo : ${formatMoney(delivery.fee)} annoncés au client`;
+  return `Livraison — ${delivery.phone}, ${delivery.address} (${fee}).`;
+}
+
+/**
+ * Retrouve (ou crée, ou restaure) le client à partir de son identifiant Messenger. Le téléphone
+ * et l'adresse donnés au bot remplacent les précédents (les plus récents sont les bons).
+ */
 async function resolveClient(remote: RemoteOrder): Promise<Client> {
   const existing = await clientRepository.findByMessengerId(remote.customer.psid);
+  const delivery = remote.delivery;
   if (existing !== null) {
-    return existing.deleted ? clientRepository.restore(existing.client.id) : existing.client;
+    const client = existing.deleted ? await clientRepository.restore(existing.client.id) : existing.client;
+    if (delivery === null || (client.phone === delivery.phone && client.address === delivery.address)) {
+      return client;
+    }
+    return clientRepository.update(client.id, {
+      name: client.name,
+      phone: delivery.phone,
+      address: delivery.address,
+      notes: client.notes,
+      messengerId: client.messengerId,
+    });
   }
   return clientRepository.create({
     name: remote.customer.name ?? 'Client Messenger',
-    phone: null,
-    address: null,
+    phone: delivery?.phone ?? null,
+    address: delivery?.address ?? null,
     notes: 'Client créé automatiquement depuis Messenger.',
     messengerId: remote.customer.psid,
   });
@@ -86,6 +110,7 @@ export async function importRemoteOrder(remote: RemoteOrder): Promise<boolean> {
     }
     const notes = [
       `Messenger ${remote.reference} — ${MODE_LABELS[remote.mode]}.`,
+      remote.delivery === null ? null : deliveryNote(remote.delivery),
       missing.length > 0 ? `Produits introuvables dans le catalogue : ${missing.join(', ')}.` : null,
     ]
       .filter((part): part is string => part !== null)
