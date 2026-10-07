@@ -66,6 +66,25 @@ export const facebookReplyService = {
     messengerOutboxVersion.set((version) => version + 1);
   },
 
+  /**
+   * Frais de livraison convenus pour une commande Messenger : le client les reçoit avec le total.
+   * Toujours envoyé. À appeler dans la transaction qui enregistre les frais.
+   */
+  async queueDeliveryFee(order: Order, fee: number): Promise<boolean> {
+    if (order.source !== 'MESSENGER' || order.externalRef === null) {
+      return false;
+    }
+    await messengerReplyRepository.enqueue({
+      orderId: order.id,
+      externalRef: order.externalRef,
+      kind: 'DELIVERY_FEE',
+      automatic: false,
+      deliveryFee: fee,
+    });
+    database.afterCommit(() => messengerOutboxVersion.set((version) => version + 1));
+    return true;
+  },
+
   history(orderId: string): Promise<CustomerReply[]> {
     return messengerReplyRepository.findByOrder(orderId);
   },

@@ -8,6 +8,7 @@ import { messengerReplies } from './007-messenger-replies';
 import { notificationInbox } from './008-notification-inbox';
 import { orderDelivery } from './009-order-delivery';
 import { manualReplies } from './010-manual-replies';
+import { deliveryFeeReplies } from './011-delivery-fee-replies';
 import { Migration } from './migration.types';
 
 /** Ajouter chaque nouvelle migration à la fin, sans jamais modifier une migration déjà livrée. */
@@ -22,4 +23,5 @@ export const MIGRATIONS: readonly Migration[] = [
   notificationInbox,
   orderDelivery,
   manualReplies,
+  deliveryFeeReplies,
 ];

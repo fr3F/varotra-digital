@@ -34,7 +34,15 @@ export interface RemoteOrder {
  * après vérification du stock ; les autres suivent les changements de statut faits par le vendeur ;
  * MANUAL est un message écrit par le vendeur dans l'application.
  */
-export const CUSTOMER_REPLY_KINDS = ['CONFIRMED', 'UNAVAILABLE', 'PREPARING', 'DELIVERED', 'CANCELLED', 'MANUAL'] as const;
+export const CUSTOMER_REPLY_KINDS = [
+  'CONFIRMED',
+  'UNAVAILABLE',
+  'PREPARING',
+  'DELIVERED',
+  'CANCELLED',
+  'MANUAL',
+  'DELIVERY_FEE',
+] as const;
 export type CustomerReplyKind = (typeof CUSTOMER_REPLY_KINDS)[number];
 
 export const CUSTOMER_REPLY_LABELS: Readonly<Record<CustomerReplyKind, string>> = {
@@ -44,6 +52,7 @@ export const CUSTOMER_REPLY_LABELS: Readonly<Record<CustomerReplyKind, string>> 
   DELIVERED: 'Livrée',
   CANCELLED: 'Annulée',
   MANUAL: 'Message du vendeur',
+  DELIVERY_FEE: 'Frais de livraison',
 };
 
 /** Produit en quantité insuffisante, détaillé dans la réponse « Produit indisponible actuellement. ». */

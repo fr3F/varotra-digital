@@ -362,6 +362,10 @@ export function createRepositories(db: SqlDb, shopId: string) {
         );
         return row === null ? null : toDraft(row);
       },
+      /** Frais de livraison fixés par le vendeur (commande hors Antananarivo, frais à convenir). */
+      async setDeliveryFee(id: string, fee: number): Promise<void> {
+        await db.run('UPDATE order_drafts SET delivery_fee = ? WHERE shop_id = ? AND id = ?', [fee, shopId, id]);
+      },
       async setCustomerStatus(id: string, status: CustomerOrderStatus): Promise<void> {
         await db.run('UPDATE order_drafts SET customer_status = ?, customer_status_at = ? WHERE shop_id = ? AND id = ?', [
           status,

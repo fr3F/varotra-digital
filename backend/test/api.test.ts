@@ -255,14 +255,14 @@ describe('webhook Meta', () => {
 });
 
 describe('réponse automatique Facebook', () => {
-  async function orderFrom(ctx: ReturnType<typeof setup>, psid: string, text: string) {
+  async function orderFrom(ctx: ReturnType<typeof setup>, psid: string, text: string, address = 'Analakely, Antananarivo') {
     const token = await pair(ctx.app);
     const auth = { authorization: `Bearer ${token}` };
     await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
     await postWebhook(ctx.app, webhook(psid, `${psid}-1`, { text }));
     await postWebhook(ctx.app, webhook(psid, `${psid}-2`, { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
     await postWebhook(ctx.app, webhook(psid, `${psid}-2-tel`, { text: '034 12 345 67' }));
-    await postWebhook(ctx.app, webhook(psid, `${psid}-2-adr`, { text: 'Analakely, Antananarivo' }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2-adr`, { text: address }));
     await ctx.queue.idle();
     const pending = (await ctx.app.inject({ url: '/v1/orders/pending', headers: auth })).json<{ orders: { id: string }[] }>();
     return { auth, id: pending.orders[0]?.id ?? '' };
@@ -317,6 +317,23 @@ describe('réponse automatique Facebook', () => {
 
     const unknown = await ctx.app.inject({ method: 'POST', url: '/v1/orders/nope/message', headers: auth, payload: { text } });
     assert.deepEqual(unknown.json(), { delivered: false, reason: 'UNKNOWN_ORDER', text: null });
+  });
+
+  it('frais à convenir (hors Tana) : le vendeur les fixe, le client reçoit frais et total', async () => {
+    const ctx = setup();
+    const { auth, id } = await orderFrom(ctx, 'f1', '2 huile tiko', 'Toamasina');
+    const bad = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/delivery-fee`, headers: auth, payload: { deliveryFee: -1 } });
+    assert.equal(bad.statusCode, 400);
+
+    const result = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/delivery-fee`, headers: auth, payload: { deliveryFee: 8000 } });
+    const body = result.json<{ delivered: boolean; text: string }>();
+    assert.equal(body.delivered, true);
+    // Montants avec espace insécable (formatMoney).
+    assert.match(body.text, /: 8\s000\sAr\n/);
+    assert.match(body.text, /27\s000\sAr$/);
+    assert.equal(ctx.sent.at(-1)?.text, body.text);
+    const history = (await ctx.app.inject({ url: `/v1/orders/${id}/replies`, headers: auth })).json<{ replies: { kind: string }[] }>();
+    assert.equal(history.replies.at(-1)?.kind, 'MANUAL');
   });
 
   it('frais de livraison réglés depuis l’application', async () => {

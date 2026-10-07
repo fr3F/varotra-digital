@@ -13,6 +13,7 @@ import { notificationCenter } from '../notifications/notification-center';
 import { notificationPreferencesStore, notificationService } from '../notifications/notification.service';
 import { orderService } from '../order.service';
 import { productService } from '../product.service';
+import { parseDeliveryFee } from '@/utils/money.utils';
 import { MessengerApiError, messengerApi, normalizeBackendUrl } from './messenger-api';
 import { importRemoteOrder } from './messenger-import';
 import { messengerStore } from './messenger-state';
@@ -33,8 +34,6 @@ const KEYS = {
 } as const;
 
 
-/** Plafond aligné sur le serveur : protège contre une faute de frappe. */
-const MAX_DELIVERY_FEE = 1_000_000;
 
 let running: Promise<SyncReport> | null = null;
 /** Jeton Expo Push de ce téléphone, obtenu une fois par lancement (undefined : pas encore demandé). */
@@ -111,7 +110,9 @@ async function flushReplies(baseUrl: string, token: string): Promise<number> {
       const { result, text } =
         entry.kind === 'MANUAL'
           ? await messengerApi.sendMessage(baseUrl, token, entry.externalRef, entry.messageText ?? '')
-          : await messengerApi.notifyCustomer(baseUrl, token, entry.externalRef, entry.kind, entry.unavailable);
+          : entry.kind === 'DELIVERY_FEE'
+            ? await messengerApi.sendDeliveryFee(baseUrl, token, entry.externalRef, entry.deliveryFee ?? 0)
+            : await messengerApi.notifyCustomer(baseUrl, token, entry.externalRef, entry.kind, entry.unavailable);
       await messengerReplyRepository.markProcessed(entry.id, result, text);
       sent += result === 'DELIVERED' ? 1 : 0;
     } catch (error: unknown) {
@@ -241,9 +242,8 @@ export const messengerSyncService = {
 
   /** Frais de livraison dans Antananarivo (Ariary) : enregistrés puis transmis au serveur. */
   async setDeliveryFee(value: string): Promise<void> {
-    const digits = value.replace(/[\s.]/g, '');
-    const fee = Number(digits);
-    if (digits.length === 0 || !Number.isSafeInteger(fee) || fee < 0 || fee > MAX_DELIVERY_FEE) {
+    const fee = parseDeliveryFee(value);
+    if (fee === null) {
       throw new ValidationError('Frais de livraison : montant entre 0 et 1 000 000 Ar.');
     }
     await settingsRepository.set(KEYS.deliveryFee, String(fee));

@@ -53,6 +53,11 @@ export function notificationText(
   return note === undefined || note.length === 0 ? body[event] : `${body[event]}\n${note}`;
 }
 
+/** Frais de livraison convenus par le vendeur, avec le total à payer, dans la langue du client. */
+export function deliveryFeeText(draft: OrderDraft, fee: number, lang: Lang = DEFAULT_LANG): string {
+  return MESSAGES[lang].deliveryFeeSet(draft.reference, formatMoney(fee), formatMoney(orderTotal(draft) + fee));
+}
+
 /** Réponse à « statut ? » : où en est la dernière commande du client. */
 export function statusInquiryText(draft: OrderDraft, lang: Lang = DEFAULT_LANG): string {
   const messages = MESSAGES[lang];

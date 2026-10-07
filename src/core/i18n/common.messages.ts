@@ -88,6 +88,7 @@ export const commonMessages = defineMessages<CommonMessages>(
       DELIVERED: 'Livrée',
       CANCELLED: 'Annulée',
       MANUAL: 'Message du vendeur',
+      DELIVERY_FEE: 'Frais de livraison',
     },
     customerReplyResult: {
       DELIVERED: 'Envoyée sur Messenger',
@@ -138,6 +139,7 @@ export const commonMessages = defineMessages<CommonMessages>(
         DELIVERED: 'Tonga',
         CANCELLED: 'Nofoanana',
         MANUAL: 'Hafatry ny mpivarotra',
+        DELIVERY_FEE: 'Saran’ny fanaterana',
       },
       customerReplyResult: {
         DELIVERED: 'Lasa tamin’ny Messenger',
@@ -187,6 +189,7 @@ export const commonMessages = defineMessages<CommonMessages>(
         DELIVERED: 'Delivered',
         CANCELLED: 'Cancelled',
         MANUAL: 'Message from the seller',
+        DELIVERY_FEE: 'Delivery fee',
       },
       customerReplyResult: {
         DELIVERED: 'Sent on Messenger',

@@ -4,7 +4,7 @@ import { router, Stack, useFocusEffect } from 'expo-router';
 import { toErrorMessage } from '@/core/errors/app-error';
 import { commonMessages } from '@/core/i18n/common.messages';
 import { useMessages } from '@/core/i18n/i18n';
-import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
+import { colors, fontSize, radius, shadow, spacing } from '@/core/theme/theme';
 import {
   isOrderDeletable,
   isOrderEditable,
@@ -14,6 +14,8 @@ import {
 } from '@/models';
 import { orderService } from '@/services/order.service';
 import { AppButton } from '@/shared/components/AppButton';
+import { Drawer } from '@/shared/components/Drawer';
+import { FormField } from '@/shared/components/FormField';
 import { Thumbnail } from '@/shared/components/Thumbnail';
 import { ErrorBanner, LoadingView } from '@/shared/components/StatusViews';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
@@ -21,8 +23,9 @@ import { confirmAction } from '@/shared/utils/confirm';
 import { goBackOr } from '@/shared/utils/navigation';
 import { formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
-import { DeliveryCard } from './DeliveryCard';
+import { MessengerBadges } from './MessengerBadges';
 import { MessengerOrderCard } from './MessengerOrderCard';
+import { OrderCustomerCard } from './OrderCustomerCard';
 import { ordersMessages } from './orders.messages';
 import { OrderStatusBadge } from './OrderStatusBadge';
 
@@ -38,12 +41,17 @@ interface OrderDetailScreenProps {
   readonly orderId: string;
 }
 
+/**
+ * Fiche commande, de haut en bas : statut, client (appel, adresse), produits et total, actions.
+ * Messenger et historique restent dans des tiroirs fermés.
+ */
 export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [feeInput, setFeeInput] = useState('');
   const { busy, error, run } = useAsyncAction();
   const t = useMessages(ordersMessages);
-  const { orderStatus, actions, noClient } = useMessages(commonMessages);
+  const { orderStatus, actions } = useMessages(commonMessages);
 
   const refresh = useCallback(async () => {
     try {
@@ -72,6 +80,14 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
     });
   };
 
+  // Frais « à convenir » (hors Antananarivo) : saisis après l'appel, puis envoyés au client.
+  const saveDeliveryFee = () =>
+    run(async () => {
+      await orderService.setDeliveryFee(orderId, feeInput);
+      setFeeInput('');
+      await refresh();
+    });
+
   const remove = async () => {
     const message = detail?.order.stockReserved ? t.deleteReserved : t.deleteForever;
     if (!(await confirmAction(t.deleteTitle, message, actions.delete))) {
@@ -97,6 +113,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const canAdjust =
     shortages.some((shortage) => shortage.available > 0) ||
     lines.some(({ item }) => !shortages.some((shortage) => shortage.productId === item.productId));
+  const deliveryFee = order.delivery?.fee ?? null;
 
   const adjust = async () => {
     if (!(await confirmAction(t.adjustTitle, t.adjustMessage, t.adjustConfirm))) {
@@ -118,36 +135,14 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
           <Text style={styles.reference}>{order.reference}</Text>
           <OrderStatusBadge status={order.status} />
         </View>
-        <Text style={styles.meta}>{t.orderedOn(formatDisplayDateTime(order.orderedAt))}</Text>
-        {order.stockReserved ? <Text style={styles.reserved}>{t.stockReserved}</Text> : null}
-        <View style={styles.separator} />
-        <Text style={styles.sectionLabel}>{t.client}</Text>
-        <Text style={styles.value}>{client?.name ?? noClient}</Text>
-        {client?.phone ? <Text style={styles.meta}>{client.phone}</Text> : null}
-        {client?.address ? <Text style={styles.meta}>{client.address}</Text> : null}
-        {client !== null ? (
-          <Text
-            accessibilityRole="link"
-            onPress={() => router.push({ pathname: '/clients/[id]', params: { id: client.id } })}
-            style={styles.link}
-          >
-            {t.viewClient}
-          </Text>
-        ) : null}
-        {order.notes ? (
-          <>
-            <Text style={[styles.sectionLabel, styles.spaced]}>{t.notes}</Text>
-            <Text style={styles.value}>{order.notes}</Text>
-          </>
-        ) : null}
+        <Text style={styles.meta}>{formatDisplayDateTime(order.orderedAt)}</Text>
+        <MessengerBadges order={order} />
+        {order.notes ? <Text style={styles.notes}>{order.notes}</Text> : null}
       </View>
 
-      <DeliveryCard order={order} />
-
-      <MessengerOrderCard order={order} />
+      <OrderCustomerCard order={order} client={client} />
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{t.products}</Text>
         {lines.map(({ item, productName, productImageUri }) => (
           <View key={item.id} style={styles.line}>
             <Thumbnail name={productName} imageUri={productImageUri} size={40} />
@@ -162,16 +157,38 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
             <Text style={styles.lineTotal}>{formatMoney(item.lineTotal)}</Text>
           </View>
         ))}
+        {deliveryFee !== null ? (
+          <View style={styles.subRow}>
+            <Text style={styles.meta}>{t.deliveryFee}</Text>
+            <Text style={styles.subValue}>{formatMoney(deliveryFee)}</Text>
+          </View>
+        ) : null}
+        {order.delivery !== null && deliveryFee === null ? (
+          <View style={styles.feeForm}>
+            <FormField
+              label={t.deliveryFeeToAgree}
+              value={feeInput}
+              onChangeText={setFeeInput}
+              placeholder="Ar"
+              keyboardType="number-pad"
+            />
+            <AppButton
+              label={t.sendDeliveryFee}
+              onPress={() => void saveDeliveryFee()}
+              loading={busy}
+              disabled={feeInput.trim().length === 0}
+            />
+          </View>
+        ) : null}
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>{t.totalAmount}</Text>
-          <Text style={styles.totalValue}>{formatMoney(order.totalAmount)}</Text>
+          <Text style={styles.totalLabel}>{deliveryFee !== null ? t.totalWithDelivery : t.totalAmount}</Text>
+          <Text style={styles.totalValue}>{formatMoney(order.totalAmount + (deliveryFee ?? 0))}</Text>
         </View>
       </View>
 
       {hasShortage ? (
         <View style={[styles.card, styles.shortageCard]}>
           <Text style={styles.shortageTitle}>{t.shortageTitle}</Text>
-          <Text style={styles.meta}>{t.shortageMessage}</Text>
           {shortages.map((shortage) => (
             <View key={shortage.productId} style={styles.shortageRow}>
               <Text style={styles.value}>{t.shortageLine(shortage.productName, shortage.requested, shortage.available)}</Text>
@@ -183,15 +200,12 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
               />
             </View>
           ))}
-          {canAdjust ? (
-            <AppButton label={t.adjustButton} onPress={() => void adjust()} disabled={busy} />
-          ) : null}
+          {canAdjust ? <AppButton label={t.adjustButton} onPress={() => void adjust()} disabled={busy} /> : null}
         </View>
       ) : null}
 
-      {transitions.length > 0 ? (
+      {transitions.length > 0 || isOrderEditable(order.status) || isOrderDeletable(order.status) ? (
         <View style={styles.actions}>
-          <Text style={styles.sectionTitle}>{t.changeStatus}</Text>
           {transitions.map((target) => (
             <AppButton
               key={target}
@@ -201,11 +215,6 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
               disabled={busy}
             />
           ))}
-        </View>
-      ) : null}
-
-      {isOrderEditable(order.status) || isOrderDeletable(order.status) ? (
-        <View style={styles.actions}>
           {isOrderEditable(order.status) ? (
             <AppButton
               label={t.editOrder}
@@ -220,8 +229,9 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
         </View>
       ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{t.history}</Text>
+      <MessengerOrderCard order={order} />
+
+      <Drawer title={t.history} icon="time-outline">
         {history.map((change) => (
           <View key={change.id} style={styles.historyRow}>
             <Text style={styles.value}>
@@ -232,31 +242,19 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
             <Text style={styles.meta}>{formatDisplayDateTime(change.createdAt)}</Text>
           </View>
         ))}
-      </View>
+      </Drawer>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
-  card: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    gap: spacing.xs,
-  },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
+  card: { ...shadow, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, gap: spacing.xs },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   reference: { fontSize: fontSize.lg, fontWeight: '800', color: colors.text },
   meta: { fontSize: fontSize.sm, color: colors.textMuted },
-  reserved: { fontSize: fontSize.sm, fontWeight: '600', color: colors.primaryDark },
-  link: { marginTop: spacing.xs, fontSize: fontSize.sm, fontWeight: '600', color: colors.primary },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: spacing.sm },
-  sectionLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textMuted },
-  spaced: { marginTop: spacing.sm },
-  sectionTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
+  notes: { marginTop: spacing.xs, fontSize: fontSize.md, fontStyle: 'italic', color: colors.text },
   value: { fontSize: fontSize.md, color: colors.text },
   line: {
     flexDirection: 'row',
@@ -268,11 +266,14 @@ const styles = StyleSheet.create({
   },
   lineTexts: { flex: 1 },
   lineTotal: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  subRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.sm },
+  subValue: { fontSize: fontSize.md, color: colors.text, fontVariant: ['tabular-nums'] },
+  feeForm: { paddingTop: spacing.md, gap: spacing.xs },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.md },
   totalLabel: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
   totalValue: { fontSize: fontSize.xl, fontWeight: '800', color: colors.primaryDark, fontVariant: ['tabular-nums'] },
   actions: { gap: spacing.sm },
-  shortageCard: { borderColor: colors.warning, backgroundColor: colors.warningLight, gap: spacing.sm },
+  shortageCard: { backgroundColor: colors.warningLight, gap: spacing.sm },
   shortageTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.warning },
   shortageRow: { gap: spacing.sm, paddingTop: spacing.xs },
   historyRow: {
