@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import * as WebBrowser from 'expo-web-browser';
 import { DEFAULT_DELIVERY_FEE } from '@/core/constants/app.constants';
 import { toErrorMessage, ValidationError } from '@/core/errors/app-error';
 import { messengerReplyRepository } from '@/database/repositories/messenger-reply.repository';
@@ -29,6 +30,9 @@ const KEYS = {
   /** Derniers frais de livraison transmis au serveur ('' : jamais). */
   deliveryFeeSent: `${PREFIX}deliveryFeeSent`,
 } as const;
+
+/** Adresse de retour dans l'application à la fin de « Se connecter avec Facebook » (schéma app.json). */
+const FACEBOOK_RETURN_URL = 'carnetdigital://messenger';
 
 /** Plafond aligné sur le serveur : protège contre une faute de frappe. */
 const MAX_DELIVERY_FEE = 1_000_000;
@@ -128,6 +132,11 @@ async function runSync(): Promise<SyncReport> {
   }
   update({ syncing: true });
   try {
+    const shop = await messengerApi.shop(target.baseUrl, target.token);
+    update({ shop });
+    if (!shop.active) {
+      throw new ValidationError('Abonnement terminé ou suspendu : contactez le vendeur de l’application pour le renouveler.');
+    }
     await messengerApi.pushCatalog(target.baseUrl, target.token, await buildCatalog());
     await syncDeliveryFee(target.baseUrl, target.token);
     await syncPushToken(target.baseUrl, target.token).catch((error: unknown) =>
@@ -223,7 +232,7 @@ export const messengerSyncService = {
     await settingsRepository.set(KEYS.backendUrl, '');
     await settingsRepository.set(KEYS.pushToken, '');
     notificationService.setRemotePushActive(false);
-    update({ connected: false, backendUrl: null, lastError: null, pushActive: false });
+    update({ connected: false, backendUrl: null, lastError: null, pushActive: false, shop: null });
   },
 
   async setAutoReply(enabled: boolean): Promise<void> {
@@ -243,6 +252,25 @@ export const messengerSyncService = {
     if (messengerStore.get().connected) {
       await messengerSyncService.sync();
     }
+  },
+
+  /**
+   * « Se connecter avec Facebook » : le vendeur se connecte et choisit sa Page dans le navigateur,
+   * puis revient dans l'application. Renvoie true si une Page est reliée ensuite.
+   */
+  async connectFacebook(): Promise<boolean> {
+    const target = await connection();
+    if (target === null) {
+      throw new ValidationError('Saisissez d’abord votre code d’activation.');
+    }
+    const url = await messengerApi.facebookConnectUrl(target.baseUrl, target.token);
+    await WebBrowser.openAuthSessionAsync(url, FACEBOOK_RETURN_URL);
+    const shop = await messengerApi.shop(target.baseUrl, target.token);
+    update({ shop });
+    if (shop.pageLinked) {
+      await messengerSyncService.sync();
+    }
+    return shop.pageLinked;
   },
 
   async setNotifyCustomer(enabled: boolean): Promise<void> {

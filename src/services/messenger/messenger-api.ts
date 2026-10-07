@@ -5,6 +5,7 @@ import {
   RemoteDelivery,
   RemoteOrder,
   RemoteOrderItem,
+  ShopInfo,
   UnavailableItem,
 } from '@/models';
 
@@ -104,6 +105,26 @@ function parseDelivery(value: unknown): RemoteDelivery | null {
   return { phone, address, zone, fee: num(value['fee']) };
 }
 
+/** Boutique renvoyée par GET /v1/shop ; null si la réponse est mal formée. */
+export function parseShopInfo(value: unknown): ShopInfo | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const name = str(value['name']);
+  const expiresAt = str(value['expiresAt']);
+  if (name === null || expiresAt === null) {
+    return null;
+  }
+  return {
+    name,
+    pageName: str(value['pageName']),
+    pageLinked: value['pageLinked'] === true,
+    expiresAt,
+    active: value['active'] === true,
+    facebookLogin: value['facebookLogin'] === true,
+  };
+}
+
 /** Résultat d'un envoi au client renvoyé par le serveur (notification ou message du vendeur). */
 function toReplyResult(body: unknown): { result: CustomerReplyResult; text: string | null } {
   const text = isRecord(body) ? str(body['text']) : null;
@@ -167,6 +188,25 @@ export const messengerApi = {
   /** Jeton Expo Push du téléphone (null : plus de notification push). */
   async setPushToken(baseUrl: string, token: string, pushToken: string | null): Promise<void> {
     await request(baseUrl, '/v1/devices/push-token', { method: 'PUT', body: JSON.stringify({ pushToken }), token });
+  },
+
+  /** Boutique de ce téléphone : Page reliée, fin d'abonnement. */
+  async shop(baseUrl: string, token: string): Promise<ShopInfo> {
+    const shop = parseShopInfo(await request(baseUrl, '/v1/shop', { method: 'GET', token }));
+    if (shop === null) {
+      throw new MessengerApiError('Réponse inattendue du serveur (boutique).', null);
+    }
+    return shop;
+  },
+
+  /** Adresse de « Se connecter avec Facebook » (fenêtre ouverte dans le navigateur). */
+  async facebookConnectUrl(baseUrl: string, token: string): Promise<string> {
+    const body = await request(baseUrl, '/v1/facebook/connect', { method: 'POST', body: '{}', token });
+    const url = isRecord(body) ? str(body['url']) : null;
+    if (url === null) {
+      throw new MessengerApiError('Réponse inattendue du serveur (connexion Facebook).', null);
+    }
+    return url;
   },
 
   /** Frais de livraison dans Antananarivo annoncés par le bot. */

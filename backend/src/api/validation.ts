@@ -88,6 +88,31 @@ export function parseAck(body: unknown): string[] {
   return ids.map((id: unknown, index) => text(id, `ids[${index}]`, 100));
 }
 
+/** Durée d'abonnement ajoutée par l'administrateur (1 à 36 mois). */
+function months(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 36) {
+    throw new BadRequestError('Champ « months » : entre 1 et 36 mois.');
+  }
+  return value;
+}
+
+export function parseCreateShop(body: unknown): { name: string; months: number } {
+  const value = record(body);
+  return { name: text(value['name'], 'name', 80), months: months(value['months']) };
+}
+
+export function parseExtendShop(body: unknown): number {
+  return months(record(body)['months']);
+}
+
+export function parseSuspendShop(body: unknown): boolean {
+  const suspended = record(body)['suspended'];
+  if (typeof suspended !== 'boolean') {
+    throw new BadRequestError('Champ « suspended » : true ou false.');
+  }
+  return suspended;
+}
+
 /** Message écrit par le vendeur (Messenger refuse les textes de plus de 2 000 caractères). */
 export function parseManualMessage(body: unknown): string {
   return text(record(body)['text'], 'text', 2000);

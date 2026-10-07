@@ -12,7 +12,7 @@ import { FormField } from '@/shared/components/FormField';
 import { ErrorBanner } from '@/shared/components/StatusViews';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
 import { confirmAction } from '@/shared/utils/confirm';
-import { formatDisplayDateTime } from '@/utils/date.utils';
+import { formatDisplayDate, formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
 import { settingsMessages } from './settings.messages';
 
@@ -76,6 +76,13 @@ export function MessengerSettingsSection() {
       setReport(t.deliveryFeeSaved(formatMoney(messengerStore.get().deliveryFee)));
     });
 
+  const connectFacebook = () =>
+    run(async () => {
+      const linked = await messengerSyncService.connectFacebook();
+      const page = messengerStore.get().shop?.pageName ?? '';
+      setReport(linked ? t.pageConnected(page) : t.pageNotConnected);
+    });
+
   const disconnect = async () => {
     if (await confirmAction(t.disconnectTitle, t.disconnectMessage, t.disconnect)) {
       await run(() => messengerSyncService.disconnect());
@@ -106,6 +113,29 @@ export function MessengerSettingsSection() {
       ) : (
         <View style={styles.card}>
           <Text style={styles.connected}>{t.connectedTo(state.backendUrl ?? '')}</Text>
+          {state.shop !== null ? (
+            <>
+              <Text style={styles.shopName}>{t.shopName(state.shop.name)}</Text>
+              {state.shop.active ? (
+                <Text style={styles.muted}>{t.subscriptionUntil(formatDisplayDate(state.shop.expiresAt))}</Text>
+              ) : (
+                <Text style={styles.errorText}>{t.subscriptionEnded}</Text>
+              )}
+              {state.shop.pageLinked ? (
+                <Text style={styles.page}>{t.pageLinkedTo(state.shop.pageName ?? '')}</Text>
+              ) : (
+                <Text style={styles.warning}>{t.noPage}</Text>
+              )}
+              {state.shop.facebookLogin && state.shop.active ? (
+                <AppButton
+                  label={state.shop.pageLinked ? t.changePage : t.connectFacebook}
+                  variant={state.shop.pageLinked ? 'secondary' : 'primary'}
+                  onPress={() => void connectFacebook()}
+                  loading={busy}
+                />
+              ) : null}
+            </>
+          ) : null}
           <Text style={styles.muted}>
             {state.syncing
               ? t.syncing
@@ -174,6 +204,9 @@ const styles = StyleSheet.create({
   },
   muted: { fontSize: fontSize.sm, color: colors.textMuted },
   connected: { fontSize: fontSize.md, fontWeight: '700', color: colors.success },
+  shopName: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, marginTop: spacing.xs },
+  page: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
+  warning: { fontSize: fontSize.sm, fontWeight: '600', color: colors.warning },
   errorText: { fontSize: fontSize.sm, color: colors.danger },
   report: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
   spacer: { height: spacing.sm },

@@ -2,6 +2,8 @@ import type { IncomingMessage } from '../domain/conversation-engine.ts';
 
 /** Événement Messenger utile, extrait d'un webhook « page ». */
 export interface MessengerEvent {
+  /** Page Facebook qui reçoit le message : désigne la boutique. */
+  readonly pageId: string;
   /** Identifiant unique (mid du message) : sert à ignorer les renvois du même webhook. */
   readonly eventId: string;
   /** Identifiant du client propre à la Page (PSID). */
@@ -18,7 +20,7 @@ function asString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-function parseMessaging(item: unknown): MessengerEvent | null {
+function parseMessaging(item: unknown): Omit<MessengerEvent, 'pageId'> | null {
   if (!isRecord(item) || !isRecord(item['sender'])) {
     return null;
   }
@@ -73,9 +75,13 @@ export function parseWebhookBody(body: unknown): MessengerEvent[] {
     if (!isRecord(entry) || !Array.isArray(entry['messaging'])) {
       return [];
     }
+    const pageId = asString(entry['id']);
+    if (pageId === null) {
+      return [];
+    }
     return entry['messaging'].flatMap((item: unknown) => {
       const event = parseMessaging(item);
-      return event === null ? [] : [event];
+      return event === null ? [] : [{ pageId, ...event }];
     });
   });
 }
