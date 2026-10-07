@@ -104,6 +104,16 @@ function parseDelivery(value: unknown): RemoteDelivery | null {
   return { phone, address, zone, fee: num(value['fee']) };
 }
 
+/** Résultat d'un envoi au client renvoyé par le serveur (notification ou message du vendeur). */
+function toReplyResult(body: unknown): { result: CustomerReplyResult; text: string | null } {
+  const text = isRecord(body) ? str(body['text']) : null;
+  if (isRecord(body) && body['delivered'] === true) {
+    return { result: 'DELIVERED', text };
+  }
+  const reason = isRecord(body) ? body['reason'] : null;
+  return { result: reason === 'OUTSIDE_WINDOW' || reason === 'UNKNOWN_ORDER' ? reason : 'SEND_FAILED', text };
+}
+
 /** Normalise l'adresse saisie (sans « / » final). */
 export function normalizeBackendUrl(url: string): string {
   const trimmed = url.trim().replace(/\/+$/, '');
@@ -181,6 +191,21 @@ export const messengerApi = {
   },
 
   /** Demande au backend de prévenir le client ; renvoie le résultat et le texte envoyé. */
+  /** Message écrit par le vendeur, envoyé tel quel au client de la commande. */
+  async sendMessage(
+    baseUrl: string,
+    token: string,
+    remoteId: string,
+    text: string,
+  ): Promise<{ result: CustomerReplyResult; text: string | null }> {
+    const body = await request(baseUrl, `/v1/orders/${encodeURIComponent(remoteId)}/message`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+      token,
+    });
+    return toReplyResult(body);
+  },
+
   async notifyCustomer(
     baseUrl: string,
     token: string,
@@ -193,11 +218,6 @@ export const messengerApi = {
       body: JSON.stringify(unavailable.length > 0 ? { event: kind, unavailable } : { event: kind }),
       token,
     });
-    const text = isRecord(body) ? str(body['text']) : null;
-    if (isRecord(body) && body['delivered'] === true) {
-      return { result: 'DELIVERED', text };
-    }
-    const reason = isRecord(body) ? body['reason'] : null;
-    return { result: reason === 'OUTSIDE_WINDOW' || reason === 'UNKNOWN_ORDER' ? reason : 'SEND_FAILED', text };
+    return toReplyResult(body);
   },
 };

@@ -292,6 +292,24 @@ describe('réponse automatique Facebook', () => {
     );
   });
 
+  it('message écrit par le vendeur : envoyé tel quel au client, et dans l’historique', async () => {
+    const ctx = setup();
+    const { auth, id } = await orderFrom(ctx, 'v1', '1 savon');
+    const empty = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/message`, headers: auth, payload: { text: ' ' } });
+    assert.equal(empty.statusCode, 400);
+
+    const text = 'Salama! Ho tonga rahampitso maraina ny entanao.';
+    const result = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/message`, headers: auth, payload: { text } });
+    assert.deepEqual(result.json(), { delivered: true, text });
+    assert.equal(ctx.sent.at(-1)?.text, text);
+
+    const history = (await ctx.app.inject({ url: `/v1/orders/${id}/replies`, headers: auth })).json<{ replies: { kind: string }[] }>();
+    assert.equal(history.replies.at(-1)?.kind, 'MANUAL');
+
+    const unknown = await ctx.app.inject({ method: 'POST', url: '/v1/orders/nope/message', headers: auth, payload: { text } });
+    assert.deepEqual(unknown.json(), { delivered: false, reason: 'UNKNOWN_ORDER', text: null });
+  });
+
   it('frais de livraison réglés depuis l’application', async () => {
     const ctx = setup();
     const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
