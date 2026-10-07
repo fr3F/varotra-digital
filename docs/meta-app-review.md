@@ -12,7 +12,7 @@ Les blocs en anglais sont à **copier-coller** dans les formulaires Meta (les ex
 | Étape | Où | État |
 |---|---|---|
 | Vérification de l'entreprise (Business Verification) | Meta Business Suite › Paramètres › Centre de sécurité | à faire |
-| E-mail de contact dans la politique de confidentialité | `CONTACT_EMAIL` dans `backend/wrangler.jsonc`, puis `npm run deploy` | **vide** |
+| E-mail de contact dans la politique de confidentialité | `CONTACT_EMAIL` dans `backend/wrangler.jsonc` | fait (frazakarivony.dev@gmail.com) |
 | Politique de confidentialité à jour (téléphone et adresse de livraison, données des vendeurs) | `backend/src/api/legal-pages.ts` | fait |
 | Paramètres de base de l'application (§2) | developers.facebook.com › votre app › Paramètres › Général | à vérifier |
 | APK de test téléchargeable (lien EAS ou release GitHub) | `eas build --profile preview` | à faire |
