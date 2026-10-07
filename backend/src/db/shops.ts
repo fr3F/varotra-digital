@@ -93,15 +93,19 @@ export function createShopRepository(db: SqlDb, now: () => Date = () => new Date
     async rename(id: string, name: string): Promise<void> {
       await db.run('UPDATE shops SET name = ?, updated_at = ? WHERE id = ?', [name, iso(), id]);
     },
-    /** Relie la Page Facebook choisie par le vendeur ; refuse une Page déjà reliée à une autre boutique. */
+    /**
+     * Relie la Page Facebook choisie par le vendeur (la boutique prend son nom) ; refuse une Page
+     * déjà reliée à une autre boutique.
+     */
     async linkPage(id: string, page: { id: string; name: string; accessToken: string }): Promise<void> {
       const owner = await this.findByPageId(page.id);
       if (owner !== null && owner.id !== id) {
         throw new PageAlreadyLinkedError(`La Page « ${page.name} » est déjà reliée à une autre boutique.`);
       }
+      // La boutique prend le nom de la Page choisie par le vendeur.
       await db.run(
-        'UPDATE shops SET page_id = ?, page_name = ?, page_access_token = ?, updated_at = ? WHERE id = ?',
-        [page.id, page.name, page.accessToken, iso(), id],
+        'UPDATE shops SET name = ?, page_id = ?, page_name = ?, page_access_token = ?, updated_at = ? WHERE id = ?',
+        [page.name, page.id, page.name, page.accessToken, iso(), id],
       );
     },
 

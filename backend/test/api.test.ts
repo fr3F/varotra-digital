@@ -530,7 +530,7 @@ describe('plusieurs boutiques (une Page Facebook chacune)', () => {
 
   /** Crée la boutique B (admin), relie un téléphone avec son code, puis sa Page via Facebook. */
   async function shopB(ctx: ReturnType<typeof setup>) {
-    const created = await ctx.app.inject({ method: 'POST', url: '/admin/api/shops', headers: ADMIN, payload: { name: 'Rakoto Shop', months: 1 } });
+    const created = await ctx.app.inject({ method: 'POST', url: '/admin/api/shops', headers: ADMIN, payload: { name: 'Client Rakoto', months: 1 } });
     assert.equal(created.statusCode, 201);
     const code = created.json<{ shop: { id: string; activationCode: string } }>().shop;
     assert.match(code.activationCode, /^KD-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
@@ -566,8 +566,10 @@ describe('plusieurs boutiques (une Page Facebook chacune)', () => {
     await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: defaultAuth, payload: CATALOG });
     const b = await shopB(ctx);
     assert.deepEqual(subscribed, ['PAGE-B']);
-    const shop = (await ctx.app.inject({ url: '/v1/shop', headers: b.auth })).json<{ pageName: string; active: boolean }>();
+    const shop = (await ctx.app.inject({ url: '/v1/shop', headers: b.auth })).json<{ name: string; pageName: string; active: boolean }>();
     assert.equal(shop.pageName, 'Rakoto Shop');
+    // La boutique prend le nom de la Page choisie (et non celui saisi à la création).
+    assert.equal(shop.name, 'Rakoto Shop');
     assert.equal(shop.active, true);
 
     await ctx.app.inject({
