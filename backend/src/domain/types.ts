@@ -34,6 +34,8 @@ export interface ConversationState {
   readonly unparsedText: string | null;
   /** Langue du client (détectée sur ses messages) : le bot lui répond dans cette langue. */
   readonly lang: Lang;
+  /** Choix de la dernière réponse, dans l'ordre affiché : le client peut répondre par leur numéro. */
+  readonly choices: readonly QuickReply[];
 }
 
 export const INITIAL_CONVERSATION: ConversationState = {
@@ -42,6 +44,7 @@ export const INITIAL_CONVERSATION: ConversationState = {
   rawTexts: [],
   unparsedText: null,
   lang: DEFAULT_LANG,
+  choices: [],
 };
 
 export type DraftMode = 'GUIDED' | 'TEXT' | 'RAW';

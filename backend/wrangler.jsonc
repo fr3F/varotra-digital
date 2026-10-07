@@ -12,8 +12,9 @@
   "triggers": { "crons": ["*/30 * * * *"] },
   "vars": {
     "META_GRAPH_API_VERSION": "v25.0",
-    // Boutons du bot : "template" (dans la bulle, visibles sur Facebook Lite) ou "quick_replies".
-    "META_BUTTON_STYLE": "template",
+    // Boutons du bot : "text_first" (texte numéroté lisible sur Facebook Lite, puis boutons),
+    // "template" (boutons dans la bulle) ou "quick_replies".
+    "META_BUTTON_STYLE": "text_first",
     "BUSINESS_NAME": "Carnet Digital",
     "CONTACT_EMAIL": "",
     "CORS_ORIGINS": "",

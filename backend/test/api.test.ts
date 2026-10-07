@@ -281,11 +281,19 @@ describe('réponse automatique Facebook', () => {
     await postWebhook(ctx.app, webhook('c3', 'c3-3', { text: 'Aiza ny kaomandiko ?' }));
     await ctx.queue.idle();
     // Question en malgache : réponse en malgache.
-    assert.match(ctx.sent.at(-1)?.text ?? '', /^Ny kaomandinao MSG-\d{8}-001 \(9 500 Ar\) : voamafy ✅\.$/);
+    assert.match(
+      ctx.sent.at(-1)?.text ?? '',
+      /^Ny kaomandinao MSG-\d{8}-001 \(9\s500\sAr\) : voamafy ✅\.\n\n1\. 🛒 Kaomandy vaovao\n✍️ Valio amin’ny laharana \(ohatra: 1\)$/,
+    );
 
     await postWebhook(ctx.app, webhook('c3', 'c3-4', { text: 'Où en est ma commande ?' }));
     await ctx.queue.idle();
-    assert.match(ctx.sent.at(-1)?.text ?? '', /^Votre commande MSG-\d{8}-001 \(9 500 Ar\) est confirmée ✅\.$/);
+    assert.match(ctx.sent.at(-1)?.text ?? '', /^Votre commande MSG-\d{8}-001 \(9\s500\sAr\) est confirmée ✅\.\n\n1\. 🛒 Nouvelle commande\n/);
+
+    // Facebook Lite n'affiche pas les boutons : « 1 » vaut un appui sur « Nouvelle commande ».
+    await postWebhook(ctx.app, webhook('c3', 'c3-5', { text: '1' }));
+    await ctx.queue.idle();
+    assert.match(ctx.sent.at(-1)?.text ?? '', /• Huile Tiko 1L/);
   });
 
   it('prévient le client dans sa langue (malgache)', async () => {

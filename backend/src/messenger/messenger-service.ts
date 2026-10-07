@@ -2,7 +2,8 @@ import type { Repositories } from '../db/repositories.ts';
 import { confirmationReply, handleMessage, PAYLOADS } from '../domain/conversation-engine.ts';
 import { isStatusInquiry, statusInquiryText } from '../domain/facebook-templates.ts';
 import { detectLanguage, MESSAGES } from '../domain/i18n.ts';
-import { INITIAL_CONVERSATION } from '../domain/types.ts';
+import { choiceFromText, choicesOf, withNumberedChoices } from '../domain/numbered-choices.ts';
+import { INITIAL_CONVERSATION, type OutgoingReply } from '../domain/types.ts';
 import type { OrderPushService } from '../push/order-push.service.ts';
 import type { FacebookNotificationService } from './facebook-notification.service.ts';
 import type { MessengerClient } from './messenger-client.ts';
@@ -56,30 +57,36 @@ export function createMessengerService(deps: {
         const latest = await repos.drafts.findLatestByPsid(event.psid);
         if (event.message.kind === 'TEXT' && latest !== null && state.cart.length === 0 && isStatusInquiry(event.message.text)) {
           const lang = detectLanguage(event.message.text) ?? state.lang;
-          await repos.conversations.save({ psid: event.psid, customerName, state: { ...state, lang }, lastCustomerMessageAt });
-          await notifications.send(
-            event.psid,
-            {
-              text: statusInquiryText(latest, lang),
-              quickReplies: [{ title: MESSAGES[lang].buttons.newOrder, payload: PAYLOADS.menu }],
-            },
-            { draftId: latest.id, kind: 'STATUS_REPLY' },
-          );
+          const reply: OutgoingReply = {
+            text: statusInquiryText(latest, lang),
+            quickReplies: [{ title: MESSAGES[lang].buttons.newOrder, payload: PAYLOADS.menu }],
+          };
+          await repos.conversations.save({
+            psid: event.psid,
+            customerName,
+            state: { ...state, lang, choices: choicesOf([reply]) },
+            lastCustomerMessageAt,
+          });
+          await notifications.send(event.psid, withNumberedChoices(reply, lang), { draftId: latest.id, kind: 'STATUS_REPLY' });
           await repos.inboundEvents.markProcessed(event.eventId, null);
           return;
         }
 
-        const result = handleMessage(state, event.message, {
+        // « 2 » en réponse à une liste numérotée : même effet qu'un appui sur le 2e bouton.
+        const choice = event.message.kind === 'TEXT' ? choiceFromText(event.message.text, state.choices) : null;
+        const message = choice === null ? event.message : ({ kind: 'POSTBACK', payload: choice } as const);
+        const result = handleMessage(state, message, {
           catalog: await repos.catalog.findAll(),
           customerName,
           popularIds: await repos.drafts.popularProductIds(popularitySince(), POPULAR_COUNT),
           lastOrderItems: latest?.items ?? [],
           customerProductIds: await repos.drafts.productIdsOrderedBy(event.psid),
         });
-        await repos.conversations.save({ psid: event.psid, customerName, state: result.state, lastCustomerMessageAt });
+        const nextState = { ...result.state, choices: choicesOf(result.replies) };
+        await repos.conversations.save({ psid: event.psid, customerName, state: nextState, lastCustomerMessageAt });
 
         for (const reply of result.replies) {
-          await notifications.send(event.psid, reply);
+          await notifications.send(event.psid, withNumberedChoices(reply, nextState.lang));
         }
         if (result.order !== undefined) {
           const draft = await repos.drafts.create({ psid: event.psid, customerName, ...result.order });

@@ -1,5 +1,6 @@
 import type { Repositories } from '../db/repositories.ts';
 import { cartReminder } from '../domain/conversation-engine.ts';
+import { choicesOf, withNumberedChoices } from '../domain/numbered-choices.ts';
 import type { FacebookNotificationService } from './facebook-notification.service.ts';
 import { POPULAR_COUNT, popularitySince } from './messenger-service.ts';
 
@@ -41,8 +42,12 @@ export function createCartReminderService(deps: {
       let reminded = 0;
       for (const conversation of candidates) {
         const reply = cartReminder(conversation.state, { catalog, customerName: conversation.customerName, popularIds });
-        if (reply !== null && (await notifications.send(conversation.psid, reply))) {
-          reminded += 1;
+        if (reply !== null) {
+          // Les boutons de la relance deviennent les choix numérotés de la conversation.
+          await repos.conversations.save({ ...conversation, state: { ...conversation.state, choices: choicesOf([reply]) } });
+          if (await notifications.send(conversation.psid, withNumberedChoices(reply, conversation.state.lang))) {
+            reminded += 1;
+          }
         }
         // Marqué même sans envoi (panier vide, échec Meta) : jamais de relances en boucle.
         await repos.conversations.markReminded(conversation.psid, current.toISOString());

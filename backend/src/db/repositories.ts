@@ -68,7 +68,14 @@ function parseState(json: string): ConversationState {
       : [];
     const unparsedText = typeof value['unparsedText'] === 'string' ? value['unparsedText'] : null;
     const lang = isLang(value['lang']) ? value['lang'] : DEFAULT_LANG;
-    return { step: parseStep(value['step']), cart: parseCart(value['cart']), rawTexts, unparsedText, lang };
+    const choices = Array.isArray(value['choices'])
+      ? value['choices'].flatMap((choice: unknown) =>
+          isRecord(choice) && typeof choice['title'] === 'string' && typeof choice['payload'] === 'string'
+            ? [{ title: choice['title'], payload: choice['payload'] }]
+            : [],
+        )
+      : [];
+    return { step: parseStep(value['step']), cart: parseCart(value['cart']), rawTexts, unparsedText, lang, choices };
   } catch {
     return INITIAL_CONVERSATION;
   }

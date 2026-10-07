@@ -27,7 +27,8 @@ export interface AppConfig {
   readonly devTools: boolean;
 }
 
-export type ButtonStyle = 'template' | 'quick_replies';
+export type ButtonStyle = 'text_first' | 'template' | 'quick_replies';
+const BUTTON_STYLES: readonly ButtonStyle[] = ['text_first', 'template', 'quick_replies'];
 
 export class ConfigError extends Error {}
 
@@ -75,7 +76,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       verifyToken: required(env, 'META_VERIFY_TOKEN', 8),
       pageAccessToken: optional(env, 'META_PAGE_ACCESS_TOKEN'),
       graphApiVersion: optional(env, 'META_GRAPH_API_VERSION') ?? 'v25.0',
-      buttonStyle: optional(env, 'META_BUTTON_STYLE') === 'quick_replies' ? 'quick_replies' : 'template',
+      buttonStyle: BUTTON_STYLES.find((style) => style === optional(env, 'META_BUTTON_STYLE')) ?? 'text_first',
     },
     pairingCode: required(env, 'APP_PAIRING_CODE', 8),
     corsOrigins: (optional(env, 'CORS_ORIGINS') ?? '')

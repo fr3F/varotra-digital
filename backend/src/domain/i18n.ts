@@ -76,6 +76,8 @@ export interface Messages {
   readonly notRecognized: (parts: readonly string[]) => string;
   readonly notUnderstood: string;
   readonly textOnly: string;
+  /** Consigne sous les choix numérotés (Facebook Lite n'affiche pas les boutons). */
+  readonly chooseByNumber: string;
   readonly receipt: (reference: string, lines: string, total: string) => string;
   readonly rawSent: (reference: string) => string;
   readonly reference: string;
@@ -146,6 +148,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     cartCleared: 'Votre panier a été vidé. Écrivez « menu » pour recommencer.',
     notRecognized: (parts) => `Je n’ai pas reconnu : « ${parts.join(' », « ')} ».`,
     notUnderstood: 'Je n’ai pas bien compris 🙏 Choisissez un produit dans la liste, ou envoyez votre message tel quel au vendeur.',
+    chooseByNumber: '✍️ Répondez avec le numéro (ex. : 1)',
     textOnly: 'Je ne peux lire que les messages écrits pour le moment. Écrivez votre commande 🙂',
     receipt: (reference, lines, total) =>
       `Commande reçue ✅ (réf. ${reference})\n${lines}\nTotal : ${total}\nLe vendeur vous confirmera la disponibilité et la livraison.`,
@@ -222,6 +225,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     cartCleared: 'Voafafa ny haronao. Soraty hoe « menu » raha hanomboka indray.',
     notRecognized: (parts) => `Tsy fantatro : « ${parts.join(' », « ')} ».`,
     notUnderstood: 'Tsy azoko tsara 🙏 Mifidiana entana ao amin’ny lisitra, na alefaso amin’ny mpivarotra ny hafatrao.',
+    chooseByNumber: '✍️ Valio amin’ny laharana (ohatra: 1)',
     textOnly: 'Hafatra an-tsoratra ihany no vakiako amin’izao. Soraty ny kaomandinao 🙂',
     receipt: (reference, lines, total) =>
       `Voaray ny kaomandinao ✅ (laharana ${reference})\n${lines}\nTotaly : ${total}\nHanamafy aminao ny fisian’ny entana sy ny fanaterana ny mpivarotra.`,
@@ -298,6 +302,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     cartCleared: 'Your cart has been emptied. Type “menu” to start again.',
     notRecognized: (parts) => `I didn’t recognize: “${parts.join('”, “')}”.`,
     notUnderstood: 'Sorry, I didn’t understand 🙏 Pick a product from the list, or send your message as is to the seller.',
+    chooseByNumber: '✍️ Reply with the number (e.g. 1)',
     textOnly: 'I can only read text messages for now. Please type your order 🙂',
     receipt: (reference, lines, total) =>
       `Order received ✅ (ref. ${reference})\n${lines}\nTotal: ${total}\nThe seller will confirm availability and delivery.`,
