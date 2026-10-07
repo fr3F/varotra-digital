@@ -64,6 +64,12 @@
     "scheme": "carnetdigital",
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "frazakarivony",
+    "extra": {
+      "eas": {
+        "projectId": "b95c0b79-3ae8-4aa6-9a64-b44f01272a98"
+      }
     }
   }
 }
