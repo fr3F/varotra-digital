@@ -41,6 +41,11 @@ function OrderRow({ summary }: { readonly summary: OrderSummary }) {
         <Text style={styles.meta}>
           {order.reference} · {formatDisplayDateTime(order.orderedAt)} · {t.productCount(itemCount)}
         </Text>
+        {order.delivery !== null ? (
+          <Text style={styles.delivery} numberOfLines={1}>
+            🚚 {order.delivery.phone} · {order.delivery.address}
+          </Text>
+        ) : null}
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </Pressable>
@@ -125,6 +130,7 @@ const styles = StyleSheet.create({
   rowMain: { flex: 1, gap: spacing.xs + 2 },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, flexWrap: 'wrap' },
   client: { flex: 1, fontSize: fontSize.md, fontWeight: '700', color: colors.text },
+  delivery: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text },
   meta: { fontSize: fontSize.sm, color: colors.textMuted },
   total: { fontSize: fontSize.md, fontWeight: '800', color: colors.primary, fontVariant: ['tabular-nums'] },
 });

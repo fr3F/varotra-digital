@@ -21,6 +21,7 @@ import { confirmAction } from '@/shared/utils/confirm';
 import { goBackOr } from '@/shared/utils/navigation';
 import { formatDisplayDateTime } from '@/utils/date.utils';
 import { formatMoney } from '@/utils/money.utils';
+import { DeliveryCard } from './DeliveryCard';
 import { MessengerOrderCard } from './MessengerOrderCard';
 import { ordersMessages } from './orders.messages';
 import { OrderStatusBadge } from './OrderStatusBadge';
@@ -140,6 +141,8 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
           </>
         ) : null}
       </View>
+
+      <DeliveryCard order={order} />
 
       <MessengerOrderCard order={order} />
 

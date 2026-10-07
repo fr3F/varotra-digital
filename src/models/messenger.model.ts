@@ -1,4 +1,5 @@
 import { IsoDateString, Money } from './base.model';
+import type { OrderDelivery } from './order.model';
 
 /** Ligne d'une commande reçue via Messenger, telle que le backend la transmet. */
 export interface RemoteOrderItem {
@@ -10,17 +11,8 @@ export interface RemoteOrderItem {
 
 export type RemoteOrderMode = 'GUIDED' | 'TEXT' | 'RAW';
 
-/** TANA : frais fixe annoncé au client ; OTHER : hors d'Antananarivo, frais à convenir par téléphone. */
-export type DeliveryZone = 'TANA' | 'OTHER';
-
 /** Coordonnées données au bot par le client avant l'enregistrement de sa commande. */
-export interface RemoteDelivery {
-  readonly phone: string;
-  readonly address: string;
-  readonly zone: DeliveryZone;
-  /** Frais annoncés au client, ou null s'ils sont à convenir. */
-  readonly fee: Money | null;
-}
+export type RemoteDelivery = OrderDelivery;
 
 /** Commande Messenger en attente d'import. */
 export interface RemoteOrder {

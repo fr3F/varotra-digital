@@ -48,6 +48,18 @@ export function isOrderDeletable(status: OrderStatus): boolean {
   return status !== 'DELIVERED';
 }
 
+/** TANA : frais fixe annoncé au client ; OTHER : hors d'Antananarivo, frais à convenir par téléphone. */
+export type DeliveryZone = 'TANA' | 'OTHER';
+
+/** Livraison demandée par le client au bot Messenger. */
+export interface OrderDelivery {
+  readonly phone: string;
+  readonly address: string;
+  readonly zone: DeliveryZone;
+  /** Frais annoncés au client, ou null s'ils sont à convenir. */
+  readonly fee: Money | null;
+}
+
 export interface Order extends BaseEntity {
   readonly reference: string;
   readonly clientId: EntityId | null;
@@ -66,6 +78,8 @@ export interface Order extends BaseEntity {
   readonly needsReview: boolean;
   readonly notes: string | null;
   readonly orderedAt: IsoDateString;
+  /** Coordonnées de livraison données au bot (null : commande saisie ou sans coordonnées). */
+  readonly delivery: OrderDelivery | null;
 }
 
 export interface OrderItem extends BaseEntity {

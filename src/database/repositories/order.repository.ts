@@ -1,8 +1,33 @@
-import { EntityId, Order, ORDER_SOURCES, ORDER_STATUSES, OrderInput, OrderSummary, STOCK_CHECKS } from '@/models';
+import {
+  EntityId,
+  Order,
+  OrderDelivery,
+  ORDER_SOURCES,
+  ORDER_STATUSES,
+  OrderInput,
+  OrderSummary,
+  STOCK_CHECKS,
+} from '@/models';
 import { database } from '../database';
 import { readEnum, readNullableString, readNumber, readString } from '../sql-row';
 import { SqlExecutor, SqlRow } from '../sql.types';
 import { BaseRepository, ColumnValues } from './base.repository';
+
+/** Livraison lue sur la commande ; null sans téléphone ou sans adresse. */
+function readDelivery(row: SqlRow): OrderDelivery | null {
+  const phone = readNullableString(row, 'delivery_phone');
+  const address = readNullableString(row, 'delivery_address');
+  if (phone === null || address === null) {
+    return null;
+  }
+  const fee = row['delivery_fee'];
+  return {
+    phone,
+    address,
+    zone: row['delivery_zone'] === 'TANA' ? 'TANA' : 'OTHER',
+    fee: typeof fee === 'number' ? fee : null,
+  };
+}
 
 class OrderRepository extends BaseRepository<Order, OrderInput> {
   protected readonly tableName = 'orders';
@@ -60,6 +85,7 @@ class OrderRepository extends BaseRepository<Order, OrderInput> {
       needsReview: readNumber(row, 'needs_review') === 1,
       notes: readNullableString(row, 'notes'),
       orderedAt: readString(row, 'ordered_at'),
+      delivery: readDelivery(row),
     };
   }
 
@@ -77,6 +103,10 @@ class OrderRepository extends BaseRepository<Order, OrderInput> {
       needs_review: input.needsReview ? 1 : 0,
       notes: input.notes,
       ordered_at: input.orderedAt,
+      delivery_phone: input.delivery?.phone ?? null,
+      delivery_address: input.delivery?.address ?? null,
+      delivery_zone: input.delivery?.zone ?? null,
+      delivery_fee: input.delivery?.fee ?? null,
     };
   }
 }

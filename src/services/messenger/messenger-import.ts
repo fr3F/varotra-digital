@@ -1,8 +1,7 @@
 import { database } from '@/database/database';
 import { clientRepository } from '@/database/repositories/client.repository';
 import { productRepository } from '@/database/repositories/product.repository';
-import { Client, Order, OrderLineDraft, RemoteDelivery, RemoteOrder } from '@/models';
-import { formatMoney } from '@/utils/money.utils';
+import { Client, Order, OrderLineDraft, RemoteOrder } from '@/models';
 import { orderService } from '../order.service';
 import { stockService } from '../stock.service';
 import { facebookReplyService } from './facebook-reply.service';
@@ -33,15 +32,6 @@ async function autoReply(order: Order, lines: readonly OrderLineDraft[]): Promis
   }
   const unavailable = await stockService.findShortages(lines);
   await facebookReplyService.queue(order, 'UNAVAILABLE', { automatic: true, unavailable });
-}
-
-/** Ligne de la note de commande : où livrer et à quel prix. */
-function deliveryNote(delivery: RemoteDelivery): string {
-  const fee =
-    delivery.fee === null
-      ? 'hors Antananarivo : frais à convenir, appeler le client'
-      : `Antananarivo : ${formatMoney(delivery.fee)} annoncés au client`;
-  return `Livraison — ${delivery.phone}, ${delivery.address} (${fee}).`;
 }
 
 /**
@@ -110,7 +100,6 @@ export async function importRemoteOrder(remote: RemoteOrder): Promise<boolean> {
     }
     const notes = [
       `Messenger ${remote.reference} — ${MODE_LABELS[remote.mode]}.`,
-      remote.delivery === null ? null : deliveryNote(remote.delivery),
       missing.length > 0 ? `Produits introuvables dans le catalogue : ${missing.join(', ')}.` : null,
     ]
       .filter((part): part is string => part !== null)
@@ -125,6 +114,7 @@ export async function importRemoteOrder(remote: RemoteOrder): Promise<boolean> {
         customerMessage: remote.rawText,
         needsReview: remote.needsReview || isUnclear,
         orderedAt: remote.receivedAt,
+        delivery: remote.delivery,
       },
     );
     return { order: created, lines, unclear: isUnclear };
