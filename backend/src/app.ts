@@ -214,6 +214,13 @@ export function buildApp(deps: AppDeps): CarnetApp {
   app.get('/privacy', (c) => c.html(privacyPolicyHtml(config.legal)));
   app.get('/data-deletion', (c) => c.html(dataDeletionHtml(config.legal)));
 
+  /** Lien fixe à donner aux vendeurs : redirige vers la dernière APK (APK_URL, mise à jour à chaque build). */
+  app.get('/apk', (c) =>
+    config.apkUrl === null
+      ? c.text('Application pas encore disponible au téléchargement.', 404)
+      : c.redirect(config.apkUrl, 302),
+  );
+
   app.get('/health', (c) =>
     c.json({ ok: true, apiVersion: API_VERSION, messengerLive: config.meta.pageAccessToken !== null || facebook !== null }),
   );

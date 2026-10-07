@@ -23,4 +23,10 @@ describe('configuration', () => {
   it('refuse un code d’appairage trop court', () => {
     assert.throws(() => loadConfig({ ...base, APP_PAIRING_CODE: '123' }), ConfigError);
   });
+
+  it('lien de l’APK : https seulement, facultatif', () => {
+    assert.equal(loadConfig(base).apkUrl, null);
+    assert.equal(loadConfig({ ...base, APK_URL: 'https://expo.dev/a.apk' }).apkUrl, 'https://expo.dev/a.apk');
+    assert.throws(() => loadConfig({ ...base, APK_URL: 'http://exemple.mg/a.apk' }), ConfigError);
+  });
 });
