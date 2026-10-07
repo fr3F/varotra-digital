@@ -15,3 +15,6 @@ export const NEW_ENTITY_ID = 'new';
 
 /** Serveur Messenger déployé sur Cloudflare (proposé par défaut dans Réglages › Messenger). */
 export const DEFAULT_MESSENGER_BACKEND_URL = 'https://carnet-digital-backend.fb-page-bot.workers.dev';
+
+/** Frais de livraison dans Antananarivo annoncés par le bot Messenger (Ariary), modifiables dans Réglages. */
+export const DEFAULT_DELIVERY_FEE = 3000;

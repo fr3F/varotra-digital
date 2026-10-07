@@ -25,14 +25,12 @@ interface OrdersMessages {
   readonly adjustMessage: string;
   readonly adjustConfirm: string;
   readonly orderedOn: (date: string) => string;
-  readonly stockReserved: string;
   readonly client: string;
   readonly viewClient: string;
   readonly notes: string;
   readonly products: string;
   readonly totalAmount: string;
   readonly shortageTitle: string;
-  readonly shortageMessage: string;
   readonly shortageLine: (product: string, requested: number, available: number) => string;
   readonly addStock: (product: string) => string;
   readonly adjustButton: string;
@@ -50,9 +48,15 @@ interface OrdersMessages {
   readonly badgeReview: string;
   readonly badgeStockOk: string;
   readonly badgeShortage: string;
+  readonly deliveryFee: string;
+  readonly deliveryFeeToAgree: string;
+  readonly sendDeliveryFee: string;
+  readonly totalWithDelivery: string;
+  readonly callCustomer: string;
+  readonly writeToCustomer: string;
+  readonly messagePlaceholder: string;
+  readonly sendMessage: string;
   readonly messengerTitle: string;
-  readonly messengerReview: string;
-  readonly messengerShortage: string;
   readonly customerMessage: string;
   readonly facebookReplies: string;
 }
@@ -89,14 +93,12 @@ export const ordersMessages = defineMessages<OrdersMessages>(
     adjustMessage: 'Les quantités seront ramenées au stock disponible (produits épuisés retirés de la commande).',
     adjustConfirm: 'Ajuster',
     orderedOn: (date) => `Commandée le ${date}`,
-    stockReserved: 'Stock réservé pour cette commande',
     client: 'Client',
     viewClient: 'Voir la fiche client',
     notes: 'Notes',
     products: 'Produits',
     totalAmount: 'Montant total',
     shortageTitle: 'Stock insuffisant',
-    shortageMessage: 'La commande ne peut pas être validée tant que le stock ne suffit pas.',
     shortageLine: (product, requested, available) =>
       `${product} : ${requested} demandé(s), ${available > 0 ? `${available} disponible(s)` : 'épuisé'}`,
     addStock: (product) => `Ajouter du stock (${product})`,
@@ -115,9 +117,15 @@ export const ordersMessages = defineMessages<OrdersMessages>(
     badgeReview: 'À vérifier',
     badgeStockOk: 'Stock OK',
     badgeShortage: 'Stock insuffisant',
-    messengerTitle: 'Commande reçue via Messenger',
-    messengerReview: 'À vérifier : complétez ou corrigez les produits avec « Modifier la commande », puis validez-la.',
-    messengerShortage: 'Stock insuffisant pour au moins un produit : la validation sera refusée.',
+    deliveryFee: 'Livraison',
+    deliveryFeeToAgree: 'Frais de livraison à convenir',
+    sendDeliveryFee: 'Envoyer au client',
+    totalWithDelivery: 'Total avec livraison',
+    callCustomer: '📞 Appeler',
+    writeToCustomer: '✉️ Écrire au client',
+    messagePlaceholder: 'Votre message…',
+    sendMessage: 'Envoyer',
+    messengerTitle: 'Messenger',
     customerMessage: 'Message du client',
     facebookReplies: 'Réponses Facebook',
   },
@@ -153,14 +161,12 @@ export const ordersMessages = defineMessages<OrdersMessages>(
       adjustMessage: 'Hampihenana araka ny tahiry misy ny isa (esorina ny entana lany).',
       adjustConfirm: 'Ampifanaraho',
       orderedOn: (date) => `Nafarana ny ${date}`,
-      stockReserved: 'Voatokana ho an’ity kaomandy ity ny tahiry',
       client: 'Mpividy',
       viewClient: 'Hijery ny momba ny mpividy',
       notes: 'Fanamarihana',
       products: 'Entana',
       totalAmount: 'Vola rehetra',
       shortageTitle: 'Tsy ampy ny tahiry',
-      shortageMessage: 'Tsy azo hamafisina ny kaomandy raha mbola tsy ampy ny tahiry.',
       shortageLine: (product, requested, available) =>
         `${product} : ${requested} nangatahina, ${available > 0 ? `${available} no misy` : 'lany'}`,
       addStock: (product) => `Ampitomboy ny tahiry (${product})`,
@@ -179,9 +185,15 @@ export const ordersMessages = defineMessages<OrdersMessages>(
       badgeReview: 'Hojerena',
       badgeStockOk: 'Ampy ny tahiry',
       badgeShortage: 'Tsy ampy ny tahiry',
-      messengerTitle: 'Kaomandy tonga tamin’ny Messenger',
-      messengerReview: 'Hojerena : fenoy na ahitsio ny entana amin’ny « Hanova ny kaomandy », avy eo hamafiso.',
-      messengerShortage: 'Tsy ampy ny tahirin’ny entana iray farafahakeliny : tsy ho azo hamafisina.',
+      deliveryFee: 'Fanaterana',
+      deliveryFeeToAgree: 'Saran’ny fanaterana : resahina',
+      sendDeliveryFee: 'Alefaso amin’ny mpanjifa',
+      totalWithDelivery: 'Totaly miaraka amin’ny fanaterana',
+      callCustomer: '📞 Antsoy',
+      writeToCustomer: '✉️ Hanoratra amin’ny mpanjifa',
+      messagePlaceholder: 'Ny hafatrao…',
+      sendMessage: 'Alefaso',
+      messengerTitle: 'Messenger',
       customerMessage: 'Hafatry ny mpividy',
       facebookReplies: 'Valiny tamin’ny Facebook',
     },
@@ -216,14 +228,12 @@ export const ordersMessages = defineMessages<OrdersMessages>(
       adjustMessage: 'Quantities will be reduced to the available stock (sold-out products removed from the order).',
       adjustConfirm: 'Adjust',
       orderedOn: (date) => `Ordered on ${date}`,
-      stockReserved: 'Stock reserved for this order',
       client: 'Customer',
       viewClient: 'View customer',
       notes: 'Notes',
       products: 'Products',
       totalAmount: 'Total amount',
       shortageTitle: 'Not enough stock',
-      shortageMessage: 'The order cannot be confirmed until there is enough stock.',
       shortageLine: (product, requested, available) =>
         `${product}: ${requested} requested, ${available > 0 ? `${available} available` : 'sold out'}`,
       addStock: (product) => `Add stock (${product})`,
@@ -242,9 +252,15 @@ export const ordersMessages = defineMessages<OrdersMessages>(
       badgeReview: 'To check',
       badgeStockOk: 'Stock OK',
       badgeShortage: 'Low stock',
-      messengerTitle: 'Order received via Messenger',
-      messengerReview: 'To check: complete or fix the products with “Edit order”, then confirm it.',
-      messengerShortage: 'Not enough stock for at least one product: confirmation will be refused.',
+      deliveryFee: 'Delivery',
+      deliveryFeeToAgree: 'Delivery fee to agree',
+      sendDeliveryFee: 'Send to the customer',
+      totalWithDelivery: 'Total with delivery',
+      callCustomer: '📞 Call',
+      writeToCustomer: '✉️ Write to the customer',
+      messagePlaceholder: 'Your message…',
+      sendMessage: 'Send',
+      messengerTitle: 'Messenger',
       customerMessage: 'Customer message',
       facebookReplies: 'Facebook replies',
     },

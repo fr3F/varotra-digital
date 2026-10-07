@@ -11,6 +11,7 @@ import {
   isOrderDeletable,
   isOrderEditable,
   Order,
+  OrderDelivery,
   OrderDetail,
   OrderDraft,
   OrderInput,
@@ -19,6 +20,7 @@ import {
   OrderSummary,
   ORDER_STATUS_LABELS,
 } from '@/models';
+import { parseDeliveryFee } from '@/utils/money.utils';
 import { computeOrderTotal, orderItemService } from './order-item.service';
 import { facebookReplyService } from './messenger/facebook-reply.service';
 import { notificationService } from './notifications/notification.service';
@@ -33,6 +35,8 @@ export interface ImportedOrderOrigin {
   readonly customerMessage: string | null;
   readonly needsReview: boolean;
   readonly orderedAt: IsoDateString;
+  /** Téléphone, adresse et frais annoncés par le bot. */
+  readonly delivery: OrderDelivery | null;
 }
 
 /** État réactif partagé de la liste des commandes. */
@@ -52,6 +56,7 @@ function toInput(order: Order): OrderInput {
     needsReview: order.needsReview,
     notes: order.notes,
     orderedAt: order.orderedAt,
+    delivery: order.delivery,
   };
 }
 
@@ -145,6 +150,7 @@ export const orderService = {
           needsReview: origin !== undefined && (origin.needsReview || lines.length === 0),
           notes: draft.notes,
           orderedAt: origin?.orderedAt ?? now.toISOString(),
+          delivery: origin?.delivery ?? null,
         },
         tx,
       );
@@ -240,6 +246,28 @@ export const orderService = {
         await saleService.recordFromOrder(updated, items);
         notificationService.notifyOrderCompleted(updated, await clientNameOf(updated.clientId).catch(() => null));
       }
+      return updated;
+    });
+    await refreshStores();
+    return order;
+  },
+
+  /**
+   * Frais de livraison convenus avec le client (commande hors Antananarivo, frais « à convenir ») :
+   * enregistrés sur la commande et, pour une commande Messenger, envoyés au client avec le total.
+   */
+  async setDeliveryFee(id: EntityId, value: string): Promise<Order> {
+    const fee = parseDeliveryFee(value);
+    if (fee === null) {
+      throw new ValidationError('Frais de livraison : montant entre 0 et 1 000 000 Ar.');
+    }
+    const order = await database.transaction(async (tx) => {
+      const current = await orderRepository.getById(id, tx);
+      if (current.delivery === null) {
+        throw new ValidationError('Cette commande n’a pas de livraison.');
+      }
+      const updated = await orderRepository.update(id, { ...toInput(current), delivery: { ...current.delivery, fee } }, tx);
+      await facebookReplyService.queueDeliveryFee(updated, fee);
       return updated;
     });
     await refreshStores();

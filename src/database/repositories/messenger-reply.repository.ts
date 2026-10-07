@@ -24,6 +24,10 @@ export interface PendingReply {
   readonly externalRef: string;
   readonly kind: CustomerReplyKind;
   readonly unavailable: readonly UnavailableItem[];
+  /** Texte du vendeur à envoyer tel quel (MANUAL). */
+  readonly messageText: string | null;
+  /** Frais de livraison convenus (DELIVERY_FEE). */
+  readonly deliveryFee: number | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -44,6 +48,14 @@ function parseUnavailable(json: string | null): UnavailableItem[] {
       ? [{ productName: item['productName'], requested: item['requested'], available: item['available'] }]
       : [],
   );
+}
+
+function parseDeliveryFee(json: string | null): number | null {
+  if (json === null) {
+    return null;
+  }
+  const value: unknown = JSON.parse(json);
+  return isRecord(value) && typeof value['deliveryFee'] === 'number' ? value['deliveryFee'] : null;
 }
 
 function toReply(row: SqlRow): CustomerReply {
@@ -68,21 +80,28 @@ export const messengerReplyRepository = {
       readonly kind: CustomerReplyKind;
       readonly automatic: boolean;
       readonly unavailable?: readonly UnavailableItem[];
+      /** Message écrit par le vendeur (MANUAL), gardé dès la mise en file. */
+      readonly messageText?: string;
+      /** Frais de livraison convenus (DELIVERY_FEE). */
+      readonly deliveryFee?: number;
     },
     executor: SqlExecutor = database,
   ): Promise<void> {
     await executor.run(
-      `INSERT INTO messenger_replies (id, order_id, external_ref, kind, automatic, details_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO messenger_replies (id, order_id, external_ref, kind, automatic, details_json, message_text, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         generateId(),
         input.orderId,
         input.externalRef,
         input.kind,
         input.automatic ? 1 : 0,
-        input.unavailable === undefined || input.unavailable.length === 0
-          ? null
-          : JSON.stringify({ unavailable: input.unavailable }),
+        input.deliveryFee !== undefined
+          ? JSON.stringify({ deliveryFee: input.deliveryFee })
+          : input.unavailable === undefined || input.unavailable.length === 0
+            ? null
+            : JSON.stringify({ unavailable: input.unavailable }),
+        input.messageText ?? null,
         nowIso(),
       ],
     );
@@ -97,12 +116,15 @@ export const messengerReplyRepository = {
       externalRef: readString(row, 'external_ref'),
       kind: readEnum(row, 'kind', CUSTOMER_REPLY_KINDS),
       unavailable: parseUnavailable(readNullableString(row, 'details_json')),
+      messageText: readNullableString(row, 'message_text'),
+      deliveryFee: parseDeliveryFee(readNullableString(row, 'details_json')),
     }));
   },
 
   async markProcessed(id: string, result: CustomerReplyResult, messageText: string | null): Promise<void> {
     await database.run(
-      `UPDATE messenger_replies SET processed_at = ?, result = ?, message_text = ?, attempts = attempts + 1 WHERE id = ?`,
+      `UPDATE messenger_replies SET processed_at = ?, result = ?, message_text = COALESCE(?, message_text),
+         attempts = attempts + 1 WHERE id = ?`,
       [nowIso(), result, messageText, id],
     );
   },

@@ -36,6 +36,19 @@ describe('boutons Messenger (Facebook Lite)', () => {
     assert.equal(messages.length, 2);
   });
 
+  it('texte d’abord (lisible sur Facebook Lite), puis les boutons dans une bulle à part', () => {
+    assert.deepEqual(buildMessages('Choix\n1. B1\n2. B2', buttons(2), 'text_first'), [
+      { text: 'Choix\n1. B1\n2. B2' },
+      {
+        text: '👇',
+        quick_replies: [
+          { content_type: 'text', title: 'B1', payload: 'P1' },
+          { content_type: 'text', title: 'B2', payload: 'P2' },
+        ],
+      },
+    ]);
+  });
+
   it('réponses rapides si choisi', () => {
     const [message] = buildMessages('Choix', buttons(2), 'quick_replies');
     assert.deepEqual(message, {

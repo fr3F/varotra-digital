@@ -8,7 +8,12 @@ export interface AppConfig {
     readonly appSecret: string;
     /** Jeton choisi par vous, saisi aussi dans le tableau de bord Meta (vérification du webhook). */
     readonly verifyToken: string;
-    /** Jeton d'accès de la Page. Absent : les réponses sont seulement journalisées (mode simulation). */
+    /**
+     * Identifiant de l'application Meta : active « Se connecter avec Facebook » (une Page par boutique).
+     * Absent : seules les boutiques déjà reliées fonctionnent.
+     */
+    readonly appId: string | null;
+    /** Jeton de la Page de la boutique « default » (ancienne configuration à une seule Page). */
     readonly pageAccessToken: string | null;
     readonly graphApiVersion: string;
     /**
@@ -17,8 +22,10 @@ export interface AppConfig {
      */
     readonly buttonStyle: ButtonStyle;
   };
-  /** Code à saisir dans l'application pour la relier à ce backend. */
+  /** Ancien code d'appairage : relie un téléphone à la boutique « default ». */
   readonly pairingCode: string;
+  /** Jeton de l'administrateur (page /admin : boutiques, codes d'activation, abonnements). Absent : /admin désactivé. */
+  readonly adminToken: string | null;
   /** Origines autorisées à appeler l'API depuis un navigateur (version web de l'app). */
   readonly corsOrigins: readonly string[];
   /** Nom et contact affichés sur les pages /privacy et /data-deletion (exigées par Meta). */
@@ -27,7 +34,8 @@ export interface AppConfig {
   readonly devTools: boolean;
 }
 
-export type ButtonStyle = 'template' | 'quick_replies';
+export type ButtonStyle = 'text_first' | 'template' | 'quick_replies';
+const BUTTON_STYLES: readonly ButtonStyle[] = ['text_first', 'template', 'quick_replies'];
 
 export class ConfigError extends Error {}
 
@@ -61,6 +69,14 @@ function databasePath(env: NodeJS.ProcessEnv): string {
   return volume === null ? 'data/carnet-backend.db' : `${volume.replace(/\/+$/, '')}/carnet-backend.db`;
 }
 
+function adminToken(env: NodeJS.ProcessEnv): string | null {
+  const value = optional(env, 'ADMIN_TOKEN');
+  if (value !== null && value.length < 16) {
+    throw new ConfigError('Variable ADMIN_TOKEN trop courte (16 caractères minimum).');
+  }
+  return value;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const port = Number(env['PORT'] ?? 3000);
   if (!Number.isInteger(port) || port <= 0) {
@@ -73,11 +89,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     meta: {
       appSecret: required(env, 'META_APP_SECRET', 8),
       verifyToken: required(env, 'META_VERIFY_TOKEN', 8),
+      appId: optional(env, 'META_APP_ID'),
       pageAccessToken: optional(env, 'META_PAGE_ACCESS_TOKEN'),
       graphApiVersion: optional(env, 'META_GRAPH_API_VERSION') ?? 'v25.0',
-      buttonStyle: optional(env, 'META_BUTTON_STYLE') === 'quick_replies' ? 'quick_replies' : 'template',
+      buttonStyle: BUTTON_STYLES.find((style) => style === optional(env, 'META_BUTTON_STYLE')) ?? 'text_first',
     },
     pairingCode: required(env, 'APP_PAIRING_CODE', 8),
+    adminToken: adminToken(env),
     corsOrigins: (optional(env, 'CORS_ORIGINS') ?? '')
       .split(',')
       .map((origin) => origin.trim())

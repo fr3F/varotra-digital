@@ -1,6 +1,6 @@
 import type { Repositories } from '../db/repositories.ts';
-import { type NotificationDetails, notificationText } from '../domain/facebook-templates.ts';
-import type { MessageKind, NotificationEvent, OutgoingReply, ReplyRecord } from '../domain/types.ts';
+import { deliveryFeeText, type NotificationDetails, notificationText } from '../domain/facebook-templates.ts';
+import type { MessageKind, NotificationEvent, OrderDraft, OutgoingReply, ReplyRecord } from '../domain/types.ts';
 import type { MessengerClient } from './messenger-client.ts';
 
 /** Fenêtre standard de Messenger : la Page peut écrire librement 24 h après le dernier message du client. */
@@ -46,6 +46,19 @@ export function createFacebookNotificationService(deps: {
     }
   }
 
+  /** Message du vendeur (journalisé MANUAL) : seulement dans les 24 h suivant le dernier message du client. */
+  async function sendSellerMessage(draft: OrderDraft, text: string, label: string): Promise<NotifyResult> {
+    const conversation = await repos.conversations.find(draft.psid);
+    const lastMessage = conversation?.lastCustomerMessageAt ?? null;
+    if (lastMessage === null || now().getTime() - Date.parse(lastMessage) > MESSAGING_WINDOW_MS) {
+      await repos.outgoing.log({ psid: draft.psid, text, status: 'OUTSIDE_WINDOW', draftId: draft.id, kind: 'MANUAL' });
+      return { delivered: false, reason: 'OUTSIDE_WINDOW', text };
+    }
+    const sent = await send(draft.psid, { text }, { draftId: draft.id, kind: 'MANUAL' });
+    logger.info(`Commande ${draft.reference} : ${label} — ${sent ? 'envoyé' : 'échec'}.`);
+    return sent ? { delivered: true, text } : { delivered: false, reason: 'SEND_FAILED', text };
+  }
+
   return {
     send,
 
@@ -73,6 +86,32 @@ export function createFacebookNotificationService(deps: {
       const sent = await send(draft.psid, { text }, { draftId: draft.id, kind: event });
       logger.info(`Commande ${draft.reference} : client prévenu (${event}) — ${sent ? 'envoyé' : 'échec'}.`);
       return sent ? { delivered: true, text } : { delivered: false, reason: 'SEND_FAILED', text };
+    },
+
+    /**
+     * Message écrit par le vendeur dans l'application, envoyé tel quel au client de la commande.
+     * Même règle des 24 h que les notifications : hors fenêtre, rien n'est envoyé.
+     */
+    async sendManual(draftId: string, text: string): Promise<NotifyResult> {
+      const draft = await repos.drafts.findById(draftId);
+      if (draft === null) {
+        return { delivered: false, reason: 'UNKNOWN_ORDER', text: null };
+      }
+      return sendSellerMessage(draft, text, 'message du vendeur');
+    },
+
+    /**
+     * Frais de livraison convenus par le vendeur (hors Antananarivo) : enregistrés sur la commande,
+     * puis annoncés au client avec le total, dans sa langue. Même règle des 24 h.
+     */
+    async sendDeliveryFee(draftId: string, fee: number): Promise<NotifyResult> {
+      const draft = await repos.drafts.findById(draftId);
+      if (draft === null) {
+        return { delivered: false, reason: 'UNKNOWN_ORDER', text: null };
+      }
+      await repos.drafts.setDeliveryFee(draft.id, fee);
+      const conversation = await repos.conversations.find(draft.psid);
+      return sendSellerMessage(draft, deliveryFeeText(draft, fee, conversation?.state.lang), 'frais de livraison');
     },
 
     /** Historique des réponses envoyées pour une commande (accusé, confirmations, indisponibilités…). */

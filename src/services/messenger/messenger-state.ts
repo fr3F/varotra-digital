@@ -1,3 +1,4 @@
+import { DEFAULT_DELIVERY_FEE } from '@/core/constants/app.constants';
 import { createStore } from '@/core/state/store';
 import { MessengerState } from '@/models';
 
@@ -13,6 +14,8 @@ export const messengerStore = createStore<MessengerState>({
   autoReply: true,
   notifyCustomer: true,
   pushActive: false,
+  deliveryFee: DEFAULT_DELIVERY_FEE,
+  shop: null,
 });
 
 /**

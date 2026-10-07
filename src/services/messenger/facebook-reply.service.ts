@@ -1,7 +1,11 @@
 import { database } from '@/database/database';
 import { messengerReplyRepository } from '@/database/repositories/messenger-reply.repository';
 import { CUSTOMER_REPLY_KINDS, CustomerReply, CustomerReplyEntry, CustomerReplyKind, Order, OrderStatus, UnavailableItem } from '@/models';
+import { ValidationError } from '@/core/errors/app-error';
 import { messengerOutboxVersion, messengerStore } from './messenger-state';
+
+/** Limite Messenger pour un message texte. */
+const MAX_MESSAGE_LENGTH = 2000;
 
 /**
  * Réponses Facebook côté application : met une réponse en file d'envoi (elle part dès que le réseau
@@ -38,6 +42,47 @@ export const facebookReplyService = {
   queueForStatus(order: Order, status: OrderStatus, automatic: boolean): Promise<boolean> {
     const kind = CUSTOMER_REPLY_KINDS.find((candidate) => candidate === status);
     return kind === undefined ? Promise.resolve(false) : facebookReplyService.queue(order, kind, { automatic });
+  },
+
+  /**
+   * Message écrit par le vendeur pour le client d'une commande Messenger : mis en file, il part
+   * aussitôt (ou dès le retour du réseau). Toujours envoyé, quels que soient les réglages.
+   */
+  async sendMessage(order: Order, text: string): Promise<void> {
+    const message = text.trim();
+    if (order.source !== 'MESSENGER' || order.externalRef === null) {
+      throw new ValidationError('Seules les commandes reçues via Messenger peuvent recevoir un message.');
+    }
+    if (message.length === 0 || message.length > MAX_MESSAGE_LENGTH) {
+      throw new ValidationError('Écrivez un message (2 000 caractères au maximum).');
+    }
+    await messengerReplyRepository.enqueue({
+      orderId: order.id,
+      externalRef: order.externalRef,
+      kind: 'MANUAL',
+      automatic: false,
+      messageText: message,
+    });
+    messengerOutboxVersion.set((version) => version + 1);
+  },
+
+  /**
+   * Frais de livraison convenus pour une commande Messenger : le client les reçoit avec le total.
+   * Toujours envoyé. À appeler dans la transaction qui enregistre les frais.
+   */
+  async queueDeliveryFee(order: Order, fee: number): Promise<boolean> {
+    if (order.source !== 'MESSENGER' || order.externalRef === null) {
+      return false;
+    }
+    await messengerReplyRepository.enqueue({
+      orderId: order.id,
+      externalRef: order.externalRef,
+      kind: 'DELIVERY_FEE',
+      automatic: false,
+      deliveryFee: fee,
+    });
+    database.afterCommit(() => messengerOutboxVersion.set((version) => version + 1));
+    return true;
   },
 
   history(orderId: string): Promise<CustomerReply[]> {

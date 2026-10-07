@@ -1,23 +1,38 @@
 import { timingSafeEqual } from 'node:crypto';
 import { type Context, Hono } from 'hono';
+import { ADMIN_HTML } from './api/admin-page.ts';
+import { choosePageHtml, connectedHtml, errorHtml, parseReturnUrl } from './api/connect-pages.ts';
 import { dataDeletionHtml, privacyPolicyHtml } from './api/legal-pages.ts';
 import {
   BadRequestError,
   parseAck,
   parseCatalog,
+  parseCreateShop,
+  parseExtendShop,
+  parseManualMessage,
   parseNotifyRequest,
   parsePairRequest,
+  parseSettings,
   parsePushTokenRequest,
+  parseSuspendShop,
 } from './api/validation.ts';
 import type { AppConfig } from './config.ts';
-import type { Repositories } from './db/repositories.ts';
+import { createRepositories, type Repositories } from './db/repositories.ts';
+import { createShopRepository, PageAlreadyLinkedError } from './db/shops.ts';
+import type { SqlDb } from './db/sql.ts';
+import { DEFAULT_SHOP_ID, isShopActive, type Shop } from './domain/shop.ts';
 import type { OrderDraft } from './domain/types.ts';
 import { createCartReminderService } from './messenger/cart-reminder.service.ts';
 import { createFacebookNotificationService } from './messenger/facebook-notification.service.ts';
-import type { MessengerClient } from './messenger/messenger-client.ts';
+import { createFacebookOAuth, type FacebookOAuth, FacebookOAuthError } from './messenger/facebook-oauth.ts';
+import {
+  createGraphMessengerClient,
+  createSimulatedMessengerClient,
+  type MessengerClient,
+} from './messenger/messenger-client.ts';
 import { createMessengerService } from './messenger/messenger-service.ts';
 import { isValidSignature } from './messenger/signature.ts';
-import { parseWebhookBody } from './messenger/webhook-events.ts';
+import { type MessengerEvent, parseWebhookBody } from './messenger/webhook-events.ts';
 import { createOrderPushService } from './push/order-push.service.ts';
 import { createExpoPushClient, type PushClient } from './push/push-client.ts';
 
@@ -25,7 +40,7 @@ const API_VERSION = '1';
 const PAIRING_MAX_FAILURES = 5;
 const PAIRING_WINDOW_MS = 10 * 60 * 1000;
 
-type Env = { Variables: { deviceId: string } };
+type Env = { Variables: { deviceId: string; shop: ShopContext } };
 
 export interface Logger {
   info(message: string): void;
@@ -34,8 +49,11 @@ export interface Logger {
 
 export interface AppDeps {
   readonly config: AppConfig;
-  readonly repos: Repositories;
-  readonly messengerClient: MessengerClient;
+  readonly db: SqlDb;
+  /** Client Messenger d'une boutique (par défaut : API Graph avec le jeton de sa Page, sinon simulation). */
+  readonly messengerClientFor?: (shop: Shop) => MessengerClient;
+  /** Connexion Facebook du vendeur (par défaut : OAuth Meta si META_APP_ID est configuré). */
+  readonly facebook?: FacebookOAuth | null;
   /** Notifications push vers le téléphone du vendeur (Expo Push par défaut). */
   readonly pushClient?: PushClient;
   /**
@@ -45,6 +63,42 @@ export interface AppDeps {
   readonly defer: (c: Context, task: () => Promise<void>) => void;
   readonly logger?: Logger;
   readonly now?: () => Date;
+}
+
+/** Services d'une boutique : données, client Messenger, notifications, bot. */
+export interface ShopContext {
+  readonly shop: Shop;
+  readonly repos: Repositories;
+  readonly notifications: ReturnType<typeof createFacebookNotificationService>;
+  readonly service: ReturnType<typeof createMessengerService>;
+}
+
+function defaultLogger(deps: AppDeps): Logger {
+  return deps.logger ?? { info: () => undefined, error: (message) => console.error(message) };
+}
+
+/** Client Messenger réel si la boutique a un jeton de Page (ou, pour « default », celui des secrets). */
+function defaultClientFor(config: AppConfig) {
+  return (shop: Shop): MessengerClient => {
+    const token = shop.pageAccessToken ?? (shop.id === DEFAULT_SHOP_ID ? config.meta.pageAccessToken : null);
+    return token === null
+      ? createSimulatedMessengerClient()
+      : createGraphMessengerClient(token, config.meta.graphApiVersion, { buttonStyle: config.meta.buttonStyle });
+  };
+}
+
+function contextFactory(deps: AppDeps) {
+  const logger = defaultLogger(deps);
+  const clientFor = deps.messengerClientFor ?? defaultClientFor(deps.config);
+  const push = deps.pushClient ?? createExpoPushClient();
+  return (shop: Shop): ShopContext => {
+    const repos = createRepositories(deps.db, shop.id);
+    const client = clientFor(shop);
+    const notifications = createFacebookNotificationService({ repos, client, logger, now: deps.now });
+    const orderPush = createOrderPushService({ repos, push, logger });
+    const service = createMessengerService({ repos, client, notifications, orderPush, logger });
+    return { shop, repos, notifications, service };
+  };
 }
 
 /** Commande telle que l'application la reçoit. */
@@ -59,6 +113,7 @@ function toRemoteOrder(draft: OrderDraft) {
     needsReview: draft.needsReview,
     receivedAt: draft.createdAt,
     customerStatus: draft.customerStatus,
+    delivery: draft.delivery,
   };
 }
 
@@ -84,28 +139,44 @@ function clientIp(c: Context): string {
 /** Application HTTP (Node ou Cloudflare Workers). */
 export type CarnetApp = Hono<Env>;
 
-/** Tâches périodiques (cron Cloudflare toutes les 30 min, minuteur sur Node). */
+/** Tâches périodiques (cron Cloudflare toutes les 30 min, minuteur sur Node) : chaque boutique active. */
 export function createScheduledJobs(deps: AppDeps) {
-  const logger: Logger = deps.logger ?? { info: () => undefined, error: (message) => console.error(message) };
-  const notifications = createFacebookNotificationService({ repos: deps.repos, client: deps.messengerClient, logger, now: deps.now });
-  const reminders = createCartReminderService({ repos: deps.repos, notifications, logger, now: deps.now });
+  const logger = defaultLogger(deps);
+  const shops = createShopRepository(deps.db, deps.now);
+  const contextFor = contextFactory(deps);
   return {
     async run(): Promise<void> {
-      try {
-        await reminders.remindAbandonedCarts();
-      } catch (error: unknown) {
-        logger.error(`Relance des paniers impossible : ${error instanceof Error ? error.message : String(error)}`);
+      const now = deps.now?.() ?? new Date();
+      for (const shop of await shops.list()) {
+        if (!isShopActive(shop, now)) {
+          continue;
+        }
+        const { repos, notifications } = contextFor(shop);
+        try {
+          await createCartReminderService({ repos, notifications, logger, now: deps.now }).remindAbandonedCarts();
+        } catch (error: unknown) {
+          logger.error(`Relance des paniers impossible (${shop.name}) : ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
     },
   };
 }
 
+/** Message renvoyé à l'application quand l'abonnement de la boutique est fini ou suspendu. */
+const SUBSCRIPTION_ENDED = 'Abonnement terminé ou suspendu : contactez le vendeur de l’application pour le renouveler.';
+
 export function buildApp(deps: AppDeps): CarnetApp {
-  const { config, repos } = deps;
-  const logger: Logger = deps.logger ?? { info: () => undefined, error: (message) => console.error(message) };
-  const notifications = createFacebookNotificationService({ repos, client: deps.messengerClient, logger, now: deps.now });
-  const orderPush = createOrderPushService({ repos, push: deps.pushClient ?? createExpoPushClient(), logger });
-  const service = createMessengerService({ repos, client: deps.messengerClient, notifications, orderPush, logger });
+  const { config } = deps;
+  const logger = defaultLogger(deps);
+  const now = () => deps.now?.() ?? new Date();
+  const shops = createShopRepository(deps.db, deps.now);
+  const contextFor = contextFactory(deps);
+  const facebook =
+    deps.facebook !== undefined
+      ? deps.facebook
+      : config.meta.appId === null
+        ? null
+        : createFacebookOAuth({ appId: config.meta.appId, appSecret: config.meta.appSecret, graphApiVersion: config.meta.graphApiVersion });
   const pairingFailures = new Map<string, number[]>();
   const app = new Hono<Env>();
 
@@ -143,7 +214,9 @@ export function buildApp(deps: AppDeps): CarnetApp {
   app.get('/privacy', (c) => c.html(privacyPolicyHtml(config.legal)));
   app.get('/data-deletion', (c) => c.html(dataDeletionHtml(config.legal)));
 
-  app.get('/health', (c) => c.json({ ok: true, apiVersion: API_VERSION, messengerLive: deps.messengerClient.live }));
+  app.get('/health', (c) =>
+    c.json({ ok: true, apiVersion: API_VERSION, messengerLive: config.meta.pageAccessToken !== null || facebook !== null }),
+  );
 
   // --- Webhook Meta ------------------------------------------------------------------------
 
@@ -162,6 +235,11 @@ export function buildApp(deps: AppDeps): CarnetApp {
     return c.json({ error: 'Vérification refusée.' }, 403);
   });
 
+  /** Boutique de la Page qui reçoit le message (la boutique « default » adopte la première Page inconnue). */
+  async function shopForPage(pageId: string): Promise<Shop | null> {
+    return (await shops.findByPageId(pageId)) ?? (await shops.claimPageForDefault(pageId));
+  }
+
   /** Réception des messages : signature vérifiée sur le corps brut, réponse 200 immédiate. */
   app.post('/webhooks/messenger', async (c) => {
     const raw = Buffer.from(await c.req.arrayBuffer());
@@ -175,18 +253,149 @@ export function buildApp(deps: AppDeps): CarnetApp {
       throw new BadRequestError('JSON invalide.');
     }
     const events = parseWebhookBody(body);
-    // Traités un par un, dans l'ordre, après la réponse.
+    // Traités un par un, dans l'ordre, après la réponse ; chaque événement va à la boutique de sa Page.
     deps.defer(c, async () => {
+      const contexts = new Map<string, ShopContext | null>();
       for (const event of events) {
-        await service.handleEvent(event);
+        if (!contexts.has(event.pageId)) {
+          const shop = await shopForPage(event.pageId);
+          contexts.set(event.pageId, shop === null || !isShopActive(shop, now()) ? null : contextFor(shop));
+        }
+        const context = contexts.get(event.pageId) ?? null;
+        if (context === null) {
+          // Page inconnue ou abonnement fini : le bot se tait.
+          logger.info(`Message ignoré : Page ${event.pageId} sans boutique active.`);
+          continue;
+        }
+        await context.service.handleEvent(event satisfies MessengerEvent);
       }
     });
     return c.text('EVENT_RECEIVED');
   });
 
+  // --- Connexion Facebook du vendeur (navigateur ouvert par l'application) -------------------
+
+  /** Adresse de retour de Facebook (même hôte que la requête). */
+  const callbackUrl = (c: Context) => `${new URL(c.req.url).origin}/connect/facebook/callback`;
+
+  app.get('/connect/facebook/callback', async (c) => {
+    const state = c.req.query('state') ?? '';
+    const session = state.length > 0 ? await shops.findOAuth(state) : null;
+    if (facebook === null || session === null) {
+      return c.html(errorHtml('Lany ny fotoana na tsy mety ny fangatahana. Avereno avy ao amin’ny app.'), 400);
+    }
+    const code = c.req.query('code');
+    if (code === undefined) {
+      await shops.endOAuth(state);
+      return c.html(errorHtml('Nofoanana ny fidirana Facebook.', session.returnUrl));
+    }
+    const shop = await shops.findById(session.shopId);
+    try {
+      const userToken = await facebook.exchangeCode(code, callbackUrl(c));
+      await shops.setOAuthUserToken(state, userToken);
+      const [pages, accountName] = await Promise.all([facebook.listPages(userToken), facebook.userName(userToken)]);
+      return c.html(choosePageHtml(state, pages, accountName));
+    } catch (error: unknown) {
+      logger.error(`Connexion Facebook (${shop?.name ?? session.shopId}) : ${error instanceof Error ? error.message : String(error)}`);
+      return c.html(errorHtml(error instanceof FacebookOAuthError ? error.message : 'Nisy olana. Avereno.', session.returnUrl), 502);
+    }
+  });
+
+  /** Page choisie : jeton de Page enregistré, Page abonnée au webhook, retour dans l'application. */
+  app.post('/connect/facebook/page', async (c) => {
+    const form = await c.req.parseBody();
+    const state = typeof form['state'] === 'string' ? form['state'] : '';
+    const pageId = typeof form['pageId'] === 'string' ? form['pageId'] : '';
+    const session = state.length > 0 ? await shops.findOAuth(state) : null;
+    if (facebook === null || session === null || session.userToken === null) {
+      return c.html(errorHtml('Lany ny fotoana. Avereno avy ao amin’ny app.'), 400);
+    }
+    try {
+      const page = (await facebook.listPages(session.userToken)).find((candidate) => candidate.id === pageId);
+      if (page === undefined) {
+        return c.html(errorHtml('Tsy hita io Page io.', session.returnUrl), 400);
+      }
+      await shops.linkPage(session.shopId, page);
+      await facebook.subscribePage(page);
+      await shops.endOAuth(state);
+      logger.info(`Boutique ${session.shopId} reliée à la Page ${page.name}.`);
+      return c.html(connectedHtml(page.name, session.returnUrl));
+    } catch (error: unknown) {
+      if (error instanceof PageAlreadyLinkedError || error instanceof FacebookOAuthError) {
+        return c.html(errorHtml(error.message, session.returnUrl), 409);
+      }
+      throw error;
+    }
+  });
+
+  /**
+   * « Page hafa na kaonty hafa » : Facebook ne donne que les Pages cochées à la connexion précédente.
+   * On retire l'autorisation de l'application puis on relance la connexion, qui repart de zéro.
+   */
+  app.post('/connect/facebook/other', async (c) => {
+    const form = await c.req.parseBody();
+    const state = typeof form['state'] === 'string' ? form['state'] : '';
+    const session = state.length > 0 ? await shops.findOAuth(state) : null;
+    if (facebook === null || session === null) {
+      return c.html(errorHtml('Lany ny fotoana. Avereno avy ao amin’ny app.'), 400);
+    }
+    if (session.userToken !== null) {
+      // Échec sans gravité (jeton déjà révoqué…) : la connexion est relancée quand même.
+      await facebook.revokeApp(session.userToken).catch((error: unknown) => {
+        logger.error(`Retrait de l'autorisation Facebook : ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+    await shops.endOAuth(state);
+    const next = await shops.startOAuth(session.shopId, session.returnUrl);
+    return c.redirect(facebook.loginUrl(callbackUrl(c), next), 303);
+  });
+
+  // --- Administration (vendeur de l'application) ----------------------------------------------
+
+  if (config.adminToken !== null) {
+    const adminToken = config.adminToken;
+    app.get('/admin', (c) => c.html(ADMIN_HTML));
+    app.use('/admin/api/*', async (c, next) => {
+      const header = c.req.header('authorization') ?? '';
+      const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+      if (!sameSecret(token, adminToken)) {
+        return c.json({ error: 'Jeton administrateur incorrect.' }, 401);
+      }
+      return next();
+    });
+    const toAdminShop = (shop: Shop, devices = 0) => ({
+      id: shop.id,
+      name: shop.name,
+      activationCode: shop.activationCode,
+      pageName: shop.pageName,
+      expiresAt: shop.expiresAt,
+      suspended: shop.suspendedAt !== null,
+      active: isShopActive(shop, now()),
+      devices,
+    });
+    app.get('/admin/api/shops', async (c) =>
+      c.json({ shops: (await shops.listWithDevices()).map(({ shop, devices }) => toAdminShop(shop, devices)) }),
+    );
+    app.post('/admin/api/shops', async (c) => {
+      const { name, months } = parseCreateShop(await jsonBody(c));
+      return c.json({ shop: toAdminShop(await shops.create(name, months)) }, 201);
+    });
+    app.post('/admin/api/shops/:id/extend', async (c) => {
+      const shop = await shops.extend(c.req.param('id'), parseExtendShop(await jsonBody(c)));
+      return shop === null ? c.json({ error: 'Boutique inconnue.' }, 404) : c.json({ shop: toAdminShop(shop) });
+    });
+    app.post('/admin/api/shops/:id/suspend', async (c) => {
+      const shop = await shops.setSuspended(c.req.param('id'), parseSuspendShop(await jsonBody(c)));
+      return shop === null ? c.json({ error: 'Boutique inconnue.' }, 404) : c.json({ shop: toAdminShop(shop) });
+    });
+  }
+
   // --- API de l'application ------------------------------------------------------------------
 
-  /** Relie un téléphone au backend avec le code d'appairage ; renvoie un jeton (montré une seule fois). */
+  /**
+   * Relie un téléphone à une boutique avec son code d'activation (ou l'ancien code d'appairage,
+   * pour la boutique « default ») ; renvoie un jeton (montré une seule fois).
+   */
   app.post('/v1/devices/pair', async (c) => {
     const ip = clientIp(c);
     const recent = (pairingFailures.get(ip) ?? []).filter((time) => Date.now() - time < PAIRING_WINDOW_MS);
@@ -194,14 +403,32 @@ export function buildApp(deps: AppDeps): CarnetApp {
       return c.json({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' }, 429);
     }
     const { pairingCode, deviceName } = parsePairRequest(await jsonBody(c));
-    if (!sameSecret(pairingCode, config.pairingCode)) {
+    const shop = sameSecret(pairingCode, config.pairingCode)
+      ? await shops.findById(DEFAULT_SHOP_ID)
+      : await shops.findByActivationCode(pairingCode);
+    if (shop === null) {
       pairingFailures.set(ip, [...recent, Date.now()]);
-      return c.json({ error: 'Code d’appairage incorrect.' }, 403);
+      return c.json({ error: 'Code d’activation incorrect.' }, 403);
     }
     pairingFailures.delete(ip);
-    const device = await repos.devices.create(deviceName);
-    return c.json({ deviceId: device.id, token: device.token, apiVersion: API_VERSION }, 201);
+    if (!isShopActive(shop, now())) {
+      return c.json({ error: SUBSCRIPTION_ENDED }, 402);
+    }
+    const device = await createRepositories(deps.db, shop.id).devices.create(deviceName);
+    return c.json({ deviceId: device.id, token: device.token, apiVersion: API_VERSION, shop: toShopInfo(shop) }, 201);
   });
+
+  /** Boutique vue par l'application (sans jeton de Page). */
+  function toShopInfo(shop: Shop) {
+    return {
+      name: shop.name,
+      pageName: shop.pageName,
+      pageLinked: shop.pageId !== null,
+      expiresAt: shop.expiresAt,
+      active: isShopActive(shop, now()),
+      facebookLogin: facebook !== null,
+    };
+  }
 
   /** Routes protégées par le jeton de l'appareil (en-tête Authorization: Bearer …). */
   app.use('/v1/*', async (c, next) => {
@@ -210,27 +437,58 @@ export function buildApp(deps: AppDeps): CarnetApp {
     }
     const header = c.req.header('authorization');
     const token = header?.startsWith('Bearer ') === true ? header.slice('Bearer '.length).trim() : '';
-    const deviceId = token.length > 0 ? await repos.devices.authenticate(token) : null;
-    if (deviceId === null) {
+    const device = token.length > 0 ? await shops.authenticateDevice(token) : null;
+    const shop = device === null ? null : await shops.findById(device.shopId);
+    if (device === null || shop === null) {
       return c.json({ error: 'Appareil non autorisé : reliez l’application à nouveau.' }, 401);
     }
-    c.set('deviceId', deviceId);
+    // Abonnement fini : l'application peut encore lire l'état de sa boutique et se déconnecter.
+    const alwaysAllowed = c.req.path === '/v1/shop' || c.req.path === '/v1/devices/unpair';
+    if (!alwaysAllowed && !isShopActive(shop, now())) {
+      return c.json({ error: SUBSCRIPTION_ENDED }, 402);
+    }
+    c.set('deviceId', device.deviceId);
+    c.set('shop', contextFor(shop));
     return next();
+  });
+
+  /** Boutique de ce téléphone : nom, Page reliée, fin d'abonnement. */
+  app.get('/v1/shop', (c) => c.json(toShopInfo(c.get('shop').shop)));
+
+  /** Adresse de « Se connecter avec Facebook » pour relier (ou changer) la Page de la boutique. */
+  app.post('/v1/facebook/connect', async (c) => {
+    if (facebook === null) {
+      return c.json({ error: 'Connexion Facebook non configurée sur ce serveur (META_APP_ID).' }, 503);
+    }
+    // Corps facultatif : les anciennes versions de l'application envoient {}.
+    const body: unknown = await c.req.json<unknown>().catch(() => null);
+    const returnUrl = parseReturnUrl(body);
+    const state = await shops.startOAuth(c.get('shop').shop.id, returnUrl);
+    return c.json({ url: facebook.loginUrl(callbackUrl(c), state) });
   });
 
   /** L'application envoie son catalogue (noms, prix, quantités disponibles). */
   app.put('/v1/catalog', async (c) => {
     const products = parseCatalog(await jsonBody(c));
-    await repos.catalog.replaceAll(products);
+    await c.get('shop').repos.catalog.replaceAll(products);
     return c.json({ count: products.length });
   });
 
+  /** Réglages du vendeur utilisés par le bot (frais de livraison dans Antananarivo). */
+  app.put('/v1/settings', async (c) => {
+    const { deliveryFee } = parseSettings(await jsonBody(c));
+    await c.get('shop').repos.settings.setDeliveryFee(deliveryFee);
+    return c.json({ deliveryFee });
+  });
+
   /** Commandes Messenger pas encore importées par l'application. */
-  app.get('/v1/orders/pending', async (c) => c.json({ orders: (await repos.drafts.findPending()).map(toRemoteOrder) }));
+  app.get('/v1/orders/pending', async (c) =>
+    c.json({ orders: (await c.get('shop').repos.drafts.findPending()).map(toRemoteOrder) }),
+  );
 
   /** L'application confirme les commandes enregistrées : elles ne seront plus renvoyées. */
   app.post('/v1/orders/ack', async (c) =>
-    c.json({ acknowledged: await repos.drafts.markDelivered(parseAck(await jsonBody(c))) }),
+    c.json({ acknowledged: await c.get('shop').repos.drafts.markDelivered(parseAck(await jsonBody(c))) }),
   );
 
   /**
@@ -239,11 +497,24 @@ export function buildApp(deps: AppDeps): CarnetApp {
    */
   app.post('/v1/orders/:id/notify', async (c) => {
     const { event, details } = parseNotifyRequest(await jsonBody(c));
-    return c.json(await notifications.notify(c.req.param('id'), event, details));
+    return c.json(await c.get('shop').notifications.notify(c.req.param('id'), event, details));
+  });
+
+  /** Message écrit par le vendeur dans l'application, envoyé au client de la commande. */
+  app.post('/v1/orders/:id/message', async (c) => {
+    const text = parseManualMessage(await jsonBody(c));
+    return c.json(await c.get('shop').notifications.sendManual(c.req.param('id'), text));
+  });
+
+  /** Frais de livraison convenus par le vendeur : enregistrés puis annoncés au client avec le total. */
+  app.post('/v1/orders/:id/delivery-fee', async (c) => {
+    const { deliveryFee } = parseSettings(await jsonBody(c));
+    return c.json(await c.get('shop').notifications.sendDeliveryFee(c.req.param('id'), deliveryFee));
   });
 
   /** Historique des réponses envoyées au client pour cette commande, et statut qu'il voit. */
   app.get('/v1/orders/:id/replies', async (c) => {
+    const { repos, notifications } = c.get('shop');
     const draft = await repos.drafts.findById(c.req.param('id'));
     if (draft === null) {
       return c.json({ error: 'Commande inconnue.' }, 404);
@@ -258,13 +529,13 @@ export function buildApp(deps: AppDeps): CarnetApp {
   /** Enregistre (ou retire avec null) le jeton Expo Push de cet appareil. */
   app.put('/v1/devices/push-token', async (c) => {
     const pushToken = parsePushTokenRequest(await jsonBody(c));
-    await repos.devices.setPushToken(c.get('deviceId'), pushToken);
+    await c.get('shop').repos.devices.setPushToken(c.get('deviceId'), pushToken);
     return c.json({ ok: true, push: pushToken !== null });
   });
 
   /** Déconnecte cet appareil (le jeton devient invalide). */
   app.post('/v1/devices/unpair', async (c) => {
-    await repos.devices.revoke(c.get('deviceId'));
+    await c.get('shop').repos.devices.revoke(c.get('deviceId'));
     return c.json({ ok: true });
   });
 
@@ -272,12 +543,13 @@ export function buildApp(deps: AppDeps): CarnetApp {
 
   if (config.devTools) {
     /** Réponses envoyées à un client (simulateur), depuis l'identifiant `after`. */
-    app.get('/dev/outgoing', async (c) =>
-      c.json({
+    app.get('/dev/outgoing', async (c) => {
+      const repos = createRepositories(deps.db, c.req.query('shop') ?? DEFAULT_SHOP_ID);
+      return c.json({
         messages: await repos.outgoing.findRecent(c.req.query('psid') ?? '', Number(c.req.query('after') ?? 0)),
         lastId: await repos.outgoing.lastId(),
-      }),
-    );
+      });
+    });
   }
 
   return app;

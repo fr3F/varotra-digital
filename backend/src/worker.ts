@@ -6,8 +6,6 @@ import type { ExecutionContext } from 'hono';
 import { type AppDeps, buildApp, type CarnetApp, createScheduledJobs } from './app.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { type D1DatabaseLike, d1Database } from './db/d1.ts';
-import { createRepositories } from './db/repositories.ts';
-import { createGraphMessengerClient, createSimulatedMessengerClient } from './messenger/messenger-client.ts';
 
 interface WorkerEnv {
   readonly DB: D1DatabaseLike;
@@ -29,17 +27,9 @@ function instanceFor(env: WorkerEnv): { app: CarnetApp; deps: AppDeps } {
   if (cached !== null && cached.key === env) {
     return cached;
   }
-  const config = loadConfig(stringVars(env));
-  const messengerClient =
-    config.meta.pageAccessToken === null
-      ? createSimulatedMessengerClient()
-      : createGraphMessengerClient(config.meta.pageAccessToken, config.meta.graphApiVersion, {
-          buttonStyle: config.meta.buttonStyle,
-        });
   const deps: AppDeps = {
-    config,
-    repos: createRepositories(d1Database(env.DB)),
-    messengerClient,
+    config: loadConfig(stringVars(env)),
+    db: d1Database(env.DB),
     defer: (c, task) => c.executionCtx.waitUntil(task()),
     logger: { info: (message) => console.log(message), error: (message) => console.error(message) },
   };

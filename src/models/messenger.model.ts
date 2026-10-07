@@ -1,4 +1,5 @@
 import { IsoDateString, Money } from './base.model';
+import type { OrderDelivery } from './order.model';
 
 /** Ligne d'une commande reçue via Messenger, telle que le backend la transmet. */
 export interface RemoteOrderItem {
@@ -9,6 +10,9 @@ export interface RemoteOrderItem {
 }
 
 export type RemoteOrderMode = 'GUIDED' | 'TEXT' | 'RAW';
+
+/** Coordonnées données au bot par le client avant l'enregistrement de sa commande. */
+export type RemoteDelivery = OrderDelivery;
 
 /** Commande Messenger en attente d'import. */
 export interface RemoteOrder {
@@ -21,13 +25,24 @@ export interface RemoteOrder {
   readonly rawText: string | null;
   readonly needsReview: boolean;
   readonly receivedAt: IsoDateString;
+  /** null : message transmis tel quel, ou commande d'avant la demande des coordonnées. */
+  readonly delivery: RemoteDelivery | null;
 }
 
 /**
  * Réponses Facebook envoyées au client. CONFIRMED / UNAVAILABLE servent à la réponse automatique
- * après vérification du stock ; les autres suivent les changements de statut faits par le vendeur.
+ * après vérification du stock ; les autres suivent les changements de statut faits par le vendeur ;
+ * MANUAL est un message écrit par le vendeur dans l'application.
  */
-export const CUSTOMER_REPLY_KINDS = ['CONFIRMED', 'UNAVAILABLE', 'PREPARING', 'DELIVERED', 'CANCELLED'] as const;
+export const CUSTOMER_REPLY_KINDS = [
+  'CONFIRMED',
+  'UNAVAILABLE',
+  'PREPARING',
+  'DELIVERED',
+  'CANCELLED',
+  'MANUAL',
+  'DELIVERY_FEE',
+] as const;
 export type CustomerReplyKind = (typeof CUSTOMER_REPLY_KINDS)[number];
 
 export const CUSTOMER_REPLY_LABELS: Readonly<Record<CustomerReplyKind, string>> = {
@@ -36,6 +51,8 @@ export const CUSTOMER_REPLY_LABELS: Readonly<Record<CustomerReplyKind, string>> 
   PREPARING: 'En préparation',
   DELIVERED: 'Livrée',
   CANCELLED: 'Annulée',
+  MANUAL: 'Message du vendeur',
+  DELIVERY_FEE: 'Frais de livraison',
 };
 
 /** Produit en quantité insuffisante, détaillé dans la réponse « Produit indisponible actuellement. ». */
@@ -77,6 +94,18 @@ export interface CustomerReplyEntry {
 }
 
 /** État de la liaison avec le backend Messenger. */
+/** Boutique de ce téléphone sur le serveur : Page Facebook reliée et abonnement. */
+export interface ShopInfo {
+  readonly name: string;
+  readonly pageName: string | null;
+  readonly pageLinked: boolean;
+  readonly expiresAt: IsoDateString;
+  /** Abonnement en cours et boutique non suspendue. */
+  readonly active: boolean;
+  /** « Se connecter avec Facebook » disponible sur ce serveur. */
+  readonly facebookLogin: boolean;
+}
+
 export interface MessengerState {
   readonly connected: boolean;
   readonly backendUrl: string | null;
@@ -95,6 +124,10 @@ export interface MessengerState {
   readonly notifyCustomer: boolean;
   /** Le serveur envoie une notification push à chaque nouvelle commande (APK uniquement). */
   readonly pushActive: boolean;
+  /** Frais de livraison dans Antananarivo annoncés par le bot. */
+  readonly deliveryFee: Money;
+  /** Boutique sur le serveur (null : pas encore lue). */
+  readonly shop: ShopInfo | null;
 }
 
 export interface SyncReport {

@@ -3,8 +3,8 @@ import { beforeEach, describe, it } from 'node:test';
 import { type AppDeps, buildApp, type CarnetApp, createScheduledJobs } from '../src/app.ts';
 import type { AppConfig } from '../src/config.ts';
 import { openNodeDatabase } from '../src/db/node-sqlite.ts';
-import { createRepositories } from '../src/db/repositories.ts';
 import type { QuickReply } from '../src/domain/types.ts';
+import type { FacebookOAuth, FacebookPage } from '../src/messenger/facebook-oauth.ts';
 import type { MessengerClient } from '../src/messenger/messenger-client.ts';
 import { createTaskQueue } from '../src/messenger/messenger-service.ts';
 import { signPayload } from '../src/messenger/signature.ts';
@@ -48,8 +48,16 @@ const config: AppConfig = {
   port: 0,
   host: '127.0.0.1',
   databasePath: ':memory:',
-  meta: { appSecret: 'secret-de-test', verifyToken: 'jeton-verif', pageAccessToken: null, graphApiVersion: 'v25.0', buttonStyle: 'template' },
+  meta: {
+    appSecret: 'secret-de-test',
+    verifyToken: 'jeton-verif',
+    appId: null,
+    pageAccessToken: null,
+    graphApiVersion: 'v25.0',
+    buttonStyle: 'template',
+  },
   pairingCode: 'CODE-1234',
+  adminToken: 'admin-jeton-de-test-0123',
   corsOrigins: ['http://localhost:8081'],
   legal: { businessName: 'Boutique <Rasoa>', contactEmail: 'contact@exemple.mg' },
   devTools: false,
@@ -61,7 +69,7 @@ interface Sent {
   readonly quickReplies?: readonly QuickReply[];
 }
 
-function setup(now: () => Date = () => new Date()) {
+function setup(now: () => Date = () => new Date(), facebook: FacebookOAuth | null = null) {
   const sent: Sent[] = [];
   const client: MessengerClient = {
     live: true,
@@ -84,8 +92,9 @@ function setup(now: () => Date = () => new Date()) {
   const queue = createTaskQueue();
   const deps: AppDeps = {
     config,
-    repos: createRepositories(openNodeDatabase(':memory:')),
-    messengerClient: client,
+    db: openNodeDatabase(':memory:'),
+    messengerClientFor: () => client,
+    facebook,
     pushClient,
     defer: (_c, task) => queue.push(task),
     now,
@@ -162,13 +171,21 @@ describe('webhook Meta', () => {
     // 3 savons demandés pour 2 en stock : pas de « Valider », le client ajuste son panier.
     await postWebhook(ctx.app, webhook('u1', 'm2', { text: 'Ajuster', quick_reply: { payload: 'ADJUST' } }));
     await postWebhook(ctx.app, webhook('u1', 'm3', { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('u1', 'm3-tel', { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook('u1', 'm3-adr', { text: 'Analakely, Antananarivo' }));
     await ctx.queue.idle();
 
-    assert.equal(ctx.sent.length, 3, 'panier, panier ajusté, confirmation');
+    assert.equal(ctx.sent.length, 5, 'panier, panier ajusté, téléphone ?, adresse ?, confirmation');
     assert.match(ctx.sent[0]?.text ?? '', /⚠️ seulement 2 en stock/);
     assert.ok(!ctx.sent[0]?.quickReplies?.some((reply) => reply.payload === 'CHECKOUT'));
     assert.match(ctx.sent[1]?.text ?? '', /2 × Savon Nosy/);
-    assert.match(ctx.sent[2]?.text ?? '', /Commande reçue ✅ \(réf\. MSG-\d{8}-001\)/);
+    assert.match(ctx.sent[2]?.text ?? '', /numéro de téléphone/);
+    assert.match(ctx.sent[3]?.text ?? '', /Où faut-il livrer/);
+    // Dans Antananarivo : frais fixe (3 000 Ar par défaut) ajouté au total.
+    assert.match(
+      ctx.sent[4]?.text ?? '',
+      /Commande reçue ✅ \(réf\. MSG-\d{8}-001\)[\s\S]*📞 034 12 345 67\n📍 Analakely, Antananarivo\n🚚 Livraison \(Antananarivo\) : 3\s000\sAr\nTotal : 25\s000\sAr/,
+    );
 
     const pending = await ctx.app.inject({ url: '/v1/orders/pending', headers: auth });
     const { orders } = pending.json<{ orders: { id: string; needsReview: boolean; customer: { name: string }; items: unknown[] }[] }>();
@@ -176,6 +193,12 @@ describe('webhook Meta', () => {
     assert.equal(orders[0]?.customer.name, 'Rasoa Be');
     assert.equal(orders[0]?.items.length, 2);
     assert.equal(orders[0]?.needsReview, false, 'panier ajusté au stock');
+    assert.deepEqual((orders[0] as unknown as { delivery: unknown }).delivery, {
+      phone: '034 12 345 67',
+      address: 'Analakely, Antananarivo',
+      zone: 'TANA',
+      fee: 3000,
+    });
 
     const id = orders[0]?.id ?? '';
     const ack = await ctx.app.inject({ method: 'POST', url: '/v1/orders/ack', headers: auth, payload: { ids: [id] } });
@@ -201,11 +224,13 @@ describe('webhook Meta', () => {
     const body = JSON.stringify({
       object: 'page',
       // Même horloge que les messages suivants (sinon la conversation serait vue comme oubliée).
-      entry: [{ messaging: [{ sender: { id: 'u2' }, timestamp: Date.now(), message: { mid: 'x1', text: 'Valider', quick_reply: { payload: 'PRODUCT:p-huile' } } }] }],
+      entry: [{ id: 'PAGE', messaging: [{ sender: { id: 'u2' }, timestamp: Date.now(), message: { mid: 'x1', text: 'Valider', quick_reply: { payload: 'PRODUCT:p-huile' } } }] }],
     });
     await postWebhook(ctx.app, body);
     await postWebhook(ctx.app, webhook('u2', 'x2', { text: '1', quick_reply: { payload: 'QTY:1' } }));
     await postWebhook(ctx.app, webhook('u2', 'x3', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('u2', 'x3-tel', { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook('u2', 'x3-adr', { text: 'Analakely, Antananarivo' }));
     await ctx.queue.idle();
     const { orders } = (await ctx.app.inject({ url: '/v1/orders/pending', headers: auth })).json<{ orders: { id: string }[] }>();
 
@@ -230,12 +255,14 @@ describe('webhook Meta', () => {
 });
 
 describe('réponse automatique Facebook', () => {
-  async function orderFrom(ctx: ReturnType<typeof setup>, psid: string, text: string) {
+  async function orderFrom(ctx: ReturnType<typeof setup>, psid: string, text: string, address = 'Analakely, Antananarivo') {
     const token = await pair(ctx.app);
     const auth = { authorization: `Bearer ${token}` };
     await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
     await postWebhook(ctx.app, webhook(psid, `${psid}-1`, { text }));
     await postWebhook(ctx.app, webhook(psid, `${psid}-2`, { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2-tel`, { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2-adr`, { text: address }));
     await ctx.queue.idle();
     const pending = (await ctx.app.inject({ url: '/v1/orders/pending', headers: auth })).json<{ orders: { id: string }[] }>();
     return { auth, id: pending.orders[0]?.id ?? '' };
@@ -274,6 +301,53 @@ describe('réponse automatique Facebook', () => {
     );
   });
 
+  it('message écrit par le vendeur : envoyé tel quel au client, et dans l’historique', async () => {
+    const ctx = setup();
+    const { auth, id } = await orderFrom(ctx, 'v1', '1 savon');
+    const empty = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/message`, headers: auth, payload: { text: ' ' } });
+    assert.equal(empty.statusCode, 400);
+
+    const text = 'Salama! Ho tonga rahampitso maraina ny entanao.';
+    const result = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/message`, headers: auth, payload: { text } });
+    assert.deepEqual(result.json(), { delivered: true, text });
+    assert.equal(ctx.sent.at(-1)?.text, text);
+
+    const history = (await ctx.app.inject({ url: `/v1/orders/${id}/replies`, headers: auth })).json<{ replies: { kind: string }[] }>();
+    assert.equal(history.replies.at(-1)?.kind, 'MANUAL');
+
+    const unknown = await ctx.app.inject({ method: 'POST', url: '/v1/orders/nope/message', headers: auth, payload: { text } });
+    assert.deepEqual(unknown.json(), { delivered: false, reason: 'UNKNOWN_ORDER', text: null });
+  });
+
+  it('frais à convenir (hors Tana) : le vendeur les fixe, le client reçoit frais et total', async () => {
+    const ctx = setup();
+    const { auth, id } = await orderFrom(ctx, 'f1', '2 huile tiko', 'Toamasina');
+    const bad = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/delivery-fee`, headers: auth, payload: { deliveryFee: -1 } });
+    assert.equal(bad.statusCode, 400);
+
+    const result = await ctx.app.inject({ method: 'POST', url: `/v1/orders/${id}/delivery-fee`, headers: auth, payload: { deliveryFee: 8000 } });
+    const body = result.json<{ delivered: boolean; text: string }>();
+    assert.equal(body.delivered, true);
+    // Montants avec espace insécable (formatMoney).
+    assert.match(body.text, /: 8\s000\sAr\n/);
+    assert.match(body.text, /27\s000\sAr$/);
+    assert.equal(ctx.sent.at(-1)?.text, body.text);
+    const history = (await ctx.app.inject({ url: `/v1/orders/${id}/replies`, headers: auth })).json<{ replies: { kind: string }[] }>();
+    assert.equal(history.replies.at(-1)?.kind, 'MANUAL');
+  });
+
+  it('frais de livraison réglés depuis l’application', async () => {
+    const ctx = setup();
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    const refused = await ctx.app.inject({ method: 'PUT', url: '/v1/settings', headers: auth, payload: { deliveryFee: -1 } });
+    assert.equal(refused.statusCode, 400);
+    const saved = await ctx.app.inject({ method: 'PUT', url: '/v1/settings', headers: auth, payload: { deliveryFee: 4000 } });
+    assert.deepEqual(saved.json(), { deliveryFee: 4000 });
+
+    await orderFrom(ctx, 'f1', '1 savon');
+    assert.match(ctx.sent.at(-1)?.text ?? '', /🚚 Livraison \(Antananarivo\) : 4\s000\sAr\nTotal : 5\s500\sAr/);
+  });
+
   it('le client demande « statut ? » : réponse avec sa dernière commande', async () => {
     const ctx = setup();
     const { auth, id } = await orderFrom(ctx, 'c3', '1 huile');
@@ -281,11 +355,19 @@ describe('réponse automatique Facebook', () => {
     await postWebhook(ctx.app, webhook('c3', 'c3-3', { text: 'Aiza ny kaomandiko ?' }));
     await ctx.queue.idle();
     // Question en malgache : réponse en malgache.
-    assert.match(ctx.sent.at(-1)?.text ?? '', /^Ny kaomandinao MSG-\d{8}-001 \(9 500 Ar\) : voamafy ✅\.$/);
+    assert.match(
+      ctx.sent.at(-1)?.text ?? '',
+      /^Ny kaomandinao MSG-\d{8}-001 \(9\s500\sAr\) : voamafy ✅\.\n\n1\. 🛒 Kaomandy vaovao\n✍️ Valio amin’ny laharana \(ohatra: 1\)$/,
+    );
 
     await postWebhook(ctx.app, webhook('c3', 'c3-4', { text: 'Où en est ma commande ?' }));
     await ctx.queue.idle();
-    assert.match(ctx.sent.at(-1)?.text ?? '', /^Votre commande MSG-\d{8}-001 \(9 500 Ar\) est confirmée ✅\.$/);
+    assert.match(ctx.sent.at(-1)?.text ?? '', /^Votre commande MSG-\d{8}-001 \(9\s500\sAr\) est confirmée ✅\.\n\n1\. 🛒 Nouvelle commande\n/);
+
+    // Facebook Lite n'affiche pas les boutons : « 1 » vaut un appui sur « Nouvelle commande ».
+    await postWebhook(ctx.app, webhook('c3', 'c3-5', { text: '1' }));
+    await ctx.queue.idle();
+    assert.match(ctx.sent.at(-1)?.text ?? '', /• Huile Tiko 1L/);
   });
 
   it('prévient le client dans sa langue (malgache)', async () => {
@@ -311,6 +393,8 @@ describe('relance des paniers abandonnés', () => {
     await postWebhook(ctx.app, webhook('r1', 'r1-1', { text: 'Salama, mila huile tiko roa' }));
     await postWebhook(ctx.app, webhook('r2', 'r2-1', { text: '1 huile' }));
     await postWebhook(ctx.app, webhook('r2', 'r2-2', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('r2', 'r2-2-tel', { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook('r2', 'r2-2-adr', { text: 'Analakely, Antananarivo' }));
     await ctx.queue.idle();
     const before = ctx.sent.length;
 
@@ -333,6 +417,8 @@ describe('relance des paniers abandonnés', () => {
     await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: auth, payload: CATALOG });
     await postWebhook(ctx.app, webhook('p1', 'p1-1', { text: '2 savon' }));
     await postWebhook(ctx.app, webhook('p1', 'p1-2', { text: 'ok', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook('p1', 'p1-2-tel', { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook('p1', 'p1-2-adr', { text: 'Analakely, Antananarivo' }));
     await postWebhook(ctx.app, webhook('p2', 'p2-1', { text: 'menu' }));
     await ctx.queue.idle();
     assert.match(ctx.sent.at(-1)?.text ?? '', /• Savon Nosy — 1\D500\sAr ⭐ 🔥 plus que 2\n• Huile/);
@@ -345,6 +431,8 @@ describe('notifications push (nouvelle commande)', () => {
   async function order(ctx: ReturnType<typeof setup>, psid: string): Promise<void> {
     await postWebhook(ctx.app, webhook(psid, `${psid}-1`, { text: '2 huile tiko' }));
     await postWebhook(ctx.app, webhook(psid, `${psid}-2`, { text: 'Valider', quick_reply: { payload: 'CHECKOUT' } }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2-tel`, { text: '034 12 345 67' }));
+    await postWebhook(ctx.app, webhook(psid, `${psid}-2-adr`, { text: 'Analakely, Antananarivo' }));
     await ctx.queue.idle();
   }
 
@@ -416,6 +504,9 @@ describe('API de l’application', () => {
     assert.match(String(privacy.headers['content-type'] ?? ''), /text\/html/);
     assert.match(privacy.body, /Boutique &lt;Rasoa&gt;/, 'nom échappé');
     assert.match(privacy.body, /mailto:contact@exemple\.mg/);
+    // Ce que l'App Review vérifie : livraison demandée par le bot et données des boutiques.
+    assert.match(privacy.body, /téléphone et l’adresse de livraison/);
+    assert.match(privacy.body, /jeton d’accès de cette Page/);
     const deletion = await app.inject({ url: '/data-deletion' });
     assert.equal(deletion.statusCode, 200);
     assert.match(deletion.body, /Suppression de vos données/);
@@ -428,3 +519,223 @@ describe('API de l’application', () => {
     assert.equal(response.headers['access-control-allow-origin'], 'http://localhost:8081');
   });
 });
+
+describe('plusieurs boutiques (une Page Facebook chacune)', () => {
+  const ADMIN = { authorization: 'Bearer admin-jeton-de-test-0123' };
+  const PAGE_B: FacebookPage = { id: 'PAGE-B', name: 'Rakoto Shop', accessToken: 'jeton-page-b' };
+
+  /** Facebook simulé : le vendeur administre la Page B. */
+  function fakeFacebook(subscribed: string[], revoked: string[] = []): FacebookOAuth {
+    return {
+      loginUrl: (redirectUri, state) => `https://facebook.test/dialog?redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`,
+      async exchangeCode(code) {
+        assert.equal(code, 'code-fb');
+        return 'jeton-utilisateur';
+      },
+      async userName() {
+        return 'Rakoto Jean';
+      },
+      async listPages() {
+        return [PAGE_B];
+      },
+      async revokeApp(userToken) {
+        revoked.push(userToken);
+      },
+      async subscribePage(page) {
+        subscribed.push(page.id);
+      },
+    };
+  }
+
+  function webhookFor(pageId: string, psid: string, mid: string, text: string) {
+    return JSON.stringify({
+      object: 'page',
+      entry: [{ id: pageId, messaging: [{ sender: { id: psid }, recipient: { id: pageId }, timestamp: Date.now(), message: { mid, text } }] }],
+    });
+  }
+
+  /** Crée la boutique B (admin), relie un téléphone avec son code, puis sa Page via Facebook. */
+  async function shopB(ctx: ReturnType<typeof setup>) {
+    const created = await ctx.app.inject({ method: 'POST', url: '/admin/api/shops', headers: ADMIN, payload: { name: 'Client Rakoto', months: 1 } });
+    assert.equal(created.statusCode, 201);
+    const code = created.json<{ shop: { id: string; activationCode: string } }>().shop;
+    assert.match(code.activationCode, /^KD-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+
+    const paired = await ctx.app.inject({
+      method: 'POST',
+      url: '/v1/devices/pair',
+      // Saisie approximative : minuscules et sans tirets.
+      payload: { pairingCode: code.activationCode.toLowerCase().replace(/-/g, ''), deviceName: 'Finday Rakoto' },
+    });
+    assert.equal(paired.statusCode, 201);
+    const auth = { authorization: `Bearer ${paired.json<{ token: string }>().token}` };
+    assert.equal((await ctx.app.inject({ url: '/v1/shop', headers: auth })).json<{ pageLinked: boolean }>().pageLinked, false);
+
+    const { url } = (await ctx.app.inject({ method: 'POST', url: '/v1/facebook/connect', headers: auth })).json<{ url: string }>();
+    const state = new URL(url).searchParams.get('state') ?? '';
+    const choose = await ctx.app.inject({ url: `/connect/facebook/callback?code=code-fb&state=${state}` });
+    assert.match(choose.body, /Rakoto Shop/);
+    const linked = await ctx.app.inject({
+      method: 'POST',
+      url: '/connect/facebook/page',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ state, pageId: PAGE_B.id }).toString(),
+    });
+    assert.match(linked.body, /carnetdigital:\/\/messenger/);
+    return { id: code.id, auth };
+  }
+
+  it('chaque boutique a sa Page, son catalogue et ses commandes', async () => {
+    const subscribed: string[] = [];
+    const ctx = setup(undefined, fakeFacebook(subscribed));
+    const defaultAuth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    await ctx.app.inject({ method: 'PUT', url: '/v1/catalog', headers: defaultAuth, payload: CATALOG });
+    const b = await shopB(ctx);
+    assert.deepEqual(subscribed, ['PAGE-B']);
+    const shop = (await ctx.app.inject({ url: '/v1/shop', headers: b.auth })).json<{ name: string; pageName: string; active: boolean }>();
+    assert.equal(shop.pageName, 'Rakoto Shop');
+    // La boutique prend le nom de la Page choisie (et non celui saisi à la création).
+    assert.equal(shop.name, 'Rakoto Shop');
+    assert.equal(shop.active, true);
+
+    await ctx.app.inject({
+      method: 'PUT',
+      url: '/v1/catalog',
+      headers: b.auth,
+      payload: { products: [{ id: 'kiraro', name: 'Kiraro mainty', sku: null, unitPrice: 25000, available: 4 }] },
+    });
+    // Un client écrit à la Page B : le bot ne propose que le catalogue de B.
+    await postWebhook(ctx.app, webhookFor('PAGE-B', 'client-b', 'b1', 'salama'));
+    await ctx.queue.idle();
+    assert.match(ctx.sent.at(-1)?.text ?? '', /Kiraro mainty/);
+    assert.doesNotMatch(ctx.sent.at(-1)?.text ?? '', /Huile/);
+
+    for (const [mid, text] of [['b2', '2 kiraro'], ['b3', 'eny'], ['b4', '0341234567'], ['b5', 'Isotry']] as const) {
+      await postWebhook(ctx.app, webhookFor('PAGE-B', 'client-b', mid, text));
+    }
+    await ctx.queue.idle();
+    const pendingB = (await ctx.app.inject({ url: '/v1/orders/pending', headers: b.auth })).json<{ orders: { reference: string }[] }>();
+    assert.equal(pendingB.orders.length, 1);
+    // La boutique « default » ne voit pas la commande de B, et les références repartent de 001 par boutique.
+    assert.deepEqual((await ctx.app.inject({ url: '/v1/orders/pending', headers: defaultAuth })).json(), { orders: [] });
+    assert.match(pendingB.orders[0]?.reference ?? '', /-001$/);
+  });
+
+  it('abonnement fini ou suspendu : le bot se tait et l’application est bloquée', async () => {
+    const ctx = setup(undefined, fakeFacebook([]));
+    const b = await shopB(ctx);
+    const suspended = await ctx.app.inject({ method: 'POST', url: `/admin/api/shops/${b.id}/suspend`, headers: ADMIN, payload: { suspended: true } });
+    assert.equal(suspended.json<{ shop: { active: boolean } }>().shop.active, false);
+
+    assert.equal((await ctx.app.inject({ url: '/v1/orders/pending', headers: b.auth })).statusCode, 402);
+    // L'application peut encore afficher l'état de la boutique.
+    assert.equal((await ctx.app.inject({ url: '/v1/shop', headers: b.auth })).json<{ active: boolean }>().active, false);
+    const before = ctx.sent.length;
+    await postWebhook(ctx.app, webhookFor('PAGE-B', 'client-b', 's1', 'salama'));
+    await ctx.queue.idle();
+    assert.equal(ctx.sent.length, before);
+
+    const extended = await ctx.app.inject({ method: 'POST', url: `/admin/api/shops/${b.id}/suspend`, headers: ADMIN, payload: { suspended: false } });
+    assert.equal(extended.json<{ shop: { active: boolean } }>().shop.active, true);
+    assert.equal((await ctx.app.inject({ url: '/v1/orders/pending', headers: b.auth })).statusCode, 200);
+  });
+
+  it('prolonger : un mois de plus à partir de la fin actuelle', async () => {
+    const ctx = setup(() => new Date('2026-10-07T10:00:00Z'));
+    const created = await ctx.app.inject({ method: 'POST', url: '/admin/api/shops', headers: ADMIN, payload: { name: 'Shop', months: 1 } });
+    const { id, expiresAt } = created.json<{ shop: { id: string; expiresAt: string } }>().shop;
+    assert.equal(expiresAt, '2026-11-07T10:00:00.000Z');
+    const extended = await ctx.app.inject({ method: 'POST', url: `/admin/api/shops/${id}/extend`, headers: ADMIN, payload: { months: 3 } });
+    assert.equal(extended.json<{ shop: { expiresAt: string } }>().shop.expiresAt, '2027-02-07T10:00:00.000Z');
+  });
+
+  it('administration protégée et codes refusés', async () => {
+    const ctx = setup();
+    assert.equal((await ctx.app.inject({ url: '/admin/api/shops', headers: { authorization: 'Bearer faux' } })).statusCode, 401);
+    const wrong = await ctx.app.inject({ method: 'POST', url: '/v1/devices/pair', payload: { pairingCode: 'KD-AAAA-BBBB', deviceName: 'x' } });
+    assert.equal(wrong.statusCode, 403);
+    // Sans META_APP_ID : pas de connexion Facebook.
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    assert.equal((await ctx.app.inject({ method: 'POST', url: '/v1/facebook/connect', headers: auth })).statusCode, 503);
+  });
+
+  it('« Page hafa na kaonty hafa » retire l’autorisation et relance la connexion Facebook', async () => {
+    const revoked: string[] = [];
+    const ctx = setup(undefined, fakeFacebook([], revoked));
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    const { url } = (await ctx.app.inject({ method: 'POST', url: '/v1/facebook/connect', headers: auth })).json<{ url: string }>();
+    const state = new URL(url).searchParams.get('state') ?? '';
+    const choose = await ctx.app.inject({ url: `/connect/facebook/callback?code=code-fb&state=${state}` });
+    assert.match(choose.body, /Rakoto Jean/);
+    assert.match(choose.body, /action="\/connect\/facebook\/other"/);
+
+    const other = await ctx.app.inject({
+      method: 'POST',
+      url: '/connect/facebook/other',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ state }).toString(),
+    });
+    assert.equal(other.statusCode, 303);
+    assert.deepEqual(revoked, ['jeton-utilisateur']);
+    const next = new URL(other.headers['location'] ?? '');
+    assert.equal(next.origin, 'https://facebook.test');
+    const nextState = next.searchParams.get('state') ?? '';
+    assert.notEqual(nextState, state);
+    // L'ancienne connexion est close, la nouvelle mène de nouveau au choix de la Page.
+    const stale = await ctx.app.inject({
+      method: 'POST',
+      url: '/connect/facebook/page',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ state, pageId: PAGE_B.id }).toString(),
+    });
+    assert.equal(stale.statusCode, 400);
+    const again = await ctx.app.inject({ url: `/connect/facebook/callback?code=code-fb&state=${nextState}` });
+    assert.match(again.body, /Rakoto Shop/);
+  });
+
+  it('le bouton final rouvre l’application à l’adresse qu’elle a donnée (Expo Go), jamais ailleurs', async () => {
+    const ctx = setup(undefined, fakeFacebook([]));
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    const connect = async (returnUrl: string) => {
+      const { url } = (
+        await ctx.app.inject({ method: 'POST', url: '/v1/facebook/connect', headers: auth, payload: { returnUrl } })
+      ).json<{ url: string }>();
+      const state = new URL(url).searchParams.get('state') ?? '';
+      await ctx.app.inject({ url: `/connect/facebook/callback?code=code-fb&state=${state}` });
+      const linked = await ctx.app.inject({
+        method: 'POST',
+        url: '/connect/facebook/page',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams({ state, pageId: PAGE_B.id }).toString(),
+      });
+      return linked.body;
+    };
+    assert.match(await connect('exp://192.168.1.20:8081/--/messenger'), /href="exp:\/\/192\.168\.1\.20:8081\/--\/messenger\?connected=1"/);
+    // Adresse web refusée : retour vers l'application installée.
+    assert.match(await connect('https://evil.example/'), /href="carnetdigital:\/\/messenger\?connected=1"/);
+  });
+
+  it('une Page déjà reliée à une boutique ne peut pas l’être à une autre', async () => {
+    const ctx = setup(undefined, fakeFacebook([]));
+    await shopB(ctx);
+    const created = await ctx.app.inject({ method: 'POST', url: '/admin/api/shops', headers: ADMIN, payload: { name: 'Autre', months: 1 } });
+    const paired = await ctx.app.inject({
+      method: 'POST',
+      url: '/v1/devices/pair',
+      payload: { pairingCode: created.json<{ shop: { activationCode: string } }>().shop.activationCode, deviceName: 'x' },
+    });
+    const auth = { authorization: `Bearer ${paired.json<{ token: string }>().token}` };
+    const { url } = (await ctx.app.inject({ method: 'POST', url: '/v1/facebook/connect', headers: auth })).json<{ url: string }>();
+    const state = new URL(url).searchParams.get('state') ?? '';
+    await ctx.app.inject({ url: `/connect/facebook/callback?code=code-fb&state=${state}` });
+    const refused = await ctx.app.inject({
+      method: 'POST',
+      url: '/connect/facebook/page',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ state, pageId: PAGE_B.id }).toString(),
+    });
+    assert.equal(refused.statusCode, 409);
+    assert.match(refused.body, /déjà reliée/);
+  });
+});
+

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { commonMessages } from '@/core/i18n/common.messages';
 import { useMessages } from '@/core/i18n/i18n';
-import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
+import { colors, fontSize } from '@/core/theme/theme';
 import { resetService } from '@/services/reset.service';
 import { AppButton } from '@/shared/components/AppButton';
+import { Drawer } from '@/shared/components/Drawer';
 import { ErrorBanner } from '@/shared/components/StatusViews';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
 import { confirmAction } from '@/shared/utils/confirm';
@@ -36,34 +37,14 @@ export function DangerZoneSection() {
   };
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.title}>{t.title}</Text>
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t.cardTitle}</Text>
-        <Text style={styles.muted}>{t.description}</Text>
-        <ErrorBanner message={error} />
-        {message !== null ? <Text style={styles.done}>{message}</Text> : null}
-        <View style={styles.spaced}>
-          <AppButton label={t.cardTitle} variant="danger" onPress={() => void deleteAll()} loading={busy} />
-        </View>
-      </View>
-    </View>
+    <Drawer title={t.title} icon="warning-outline" tone="danger">
+      <ErrorBanner message={error} />
+      {message !== null ? <Text style={styles.done}>{message}</Text> : null}
+      <AppButton label={t.cardTitle} variant="danger" onPress={() => void deleteAll()} loading={busy} />
+    </Drawer>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: spacing.sm },
-  title: { fontSize: fontSize.md, fontWeight: '700', color: colors.danger },
-  card: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    backgroundColor: colors.dangerLight,
-    gap: spacing.xs,
-  },
-  cardTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
-  muted: { fontSize: fontSize.sm, color: colors.textMuted },
   done: { fontSize: fontSize.sm, fontWeight: '600', color: colors.success },
-  spaced: { marginTop: spacing.md },
 });

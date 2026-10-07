@@ -58,7 +58,8 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-web-browser"
     ],
     "scheme": "carnetdigital",
     "experiments": {
