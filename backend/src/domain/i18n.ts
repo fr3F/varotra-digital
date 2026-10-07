@@ -86,6 +86,8 @@ export interface Messages {
   readonly deliveryContact: (phone: string, address: string) => string;
   readonly deliveryFee: (fee: string) => string;
   readonly deliveryToDiscuss: string;
+  /** Frais convenus ensuite par le vendeur (commande hors Antananarivo). */
+  readonly deliveryFeeSet: (reference: string, fee: string, total: string) => string;
   readonly receipt: (reference: string, lines: string, total: string) => string;
   readonly rawSent: (reference: string) => string;
   readonly reference: string;
@@ -163,6 +165,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     deliveryContact: (phone, address) => `📞 ${phone}\n📍 ${address}`,
     deliveryFee: (fee) => `🚚 Livraison (Antananarivo) : ${fee}`,
     deliveryToDiscuss: '🚚 Livraison hors d’Antananarivo : le responsable vous appellera pour convenir des frais.',
+    deliveryFeeSet: (reference, fee, total) => `🚚 Frais de livraison (commande ${reference}) : ${fee}\nTotal à payer : ${total}`,
     chooseByNumber: '✍️ Répondez avec le numéro (ex. : 1)',
     textOnly: 'Je ne peux lire que les messages écrits pour le moment. Écrivez votre commande 🙂',
     receipt: (reference, lines, total) =>
@@ -247,6 +250,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     deliveryContact: (phone, address) => `📞 ${phone}\n📍 ${address}`,
     deliveryFee: (fee) => `🚚 Saran’ny fanaterana (Antananarivo): ${fee}`,
     deliveryToDiscuss: '🚚 Fanaterana ivelan’i Antananarivo: hiantso anao ny tompon’andraikitra mba hiresahana ny saran’ny fanaterana.',
+    deliveryFeeSet: (reference, fee, total) => `🚚 Saran’ny fanaterana (kaomandy ${reference}): ${fee}\nTotaly aloa: ${total}`,
     chooseByNumber: '✍️ Valio amin’ny laharana (ohatra: 1)',
     textOnly: 'Hafatra an-tsoratra ihany no vakiako amin’izao. Soraty ny kaomandinao 🙂',
     receipt: (reference, lines, total) =>
@@ -331,6 +335,7 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     deliveryContact: (phone, address) => `📞 ${phone}\n📍 ${address}`,
     deliveryFee: (fee) => `🚚 Delivery (Antananarivo): ${fee}`,
     deliveryToDiscuss: '🚚 Delivery outside Antananarivo: the manager will call you to agree on the fee.',
+    deliveryFeeSet: (reference, fee, total) => `🚚 Delivery fee (order ${reference}): ${fee}\nTotal to pay: ${total}`,
     chooseByNumber: '✍️ Reply with the number (e.g. 1)',
     textOnly: 'I can only read text messages for now. Please type your order 🙂',
     receipt: (reference, lines, total) =>

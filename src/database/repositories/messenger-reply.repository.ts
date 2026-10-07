@@ -26,6 +26,8 @@ export interface PendingReply {
   readonly unavailable: readonly UnavailableItem[];
   /** Texte du vendeur à envoyer tel quel (MANUAL). */
   readonly messageText: string | null;
+  /** Frais de livraison convenus (DELIVERY_FEE). */
+  readonly deliveryFee: number | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,6 +48,14 @@ function parseUnavailable(json: string | null): UnavailableItem[] {
       ? [{ productName: item['productName'], requested: item['requested'], available: item['available'] }]
       : [],
   );
+}
+
+function parseDeliveryFee(json: string | null): number | null {
+  if (json === null) {
+    return null;
+  }
+  const value: unknown = JSON.parse(json);
+  return isRecord(value) && typeof value['deliveryFee'] === 'number' ? value['deliveryFee'] : null;
 }
 
 function toReply(row: SqlRow): CustomerReply {
@@ -72,6 +82,8 @@ export const messengerReplyRepository = {
       readonly unavailable?: readonly UnavailableItem[];
       /** Message écrit par le vendeur (MANUAL), gardé dès la mise en file. */
       readonly messageText?: string;
+      /** Frais de livraison convenus (DELIVERY_FEE). */
+      readonly deliveryFee?: number;
     },
     executor: SqlExecutor = database,
   ): Promise<void> {
@@ -84,9 +96,11 @@ export const messengerReplyRepository = {
         input.externalRef,
         input.kind,
         input.automatic ? 1 : 0,
-        input.unavailable === undefined || input.unavailable.length === 0
-          ? null
-          : JSON.stringify({ unavailable: input.unavailable }),
+        input.deliveryFee !== undefined
+          ? JSON.stringify({ deliveryFee: input.deliveryFee })
+          : input.unavailable === undefined || input.unavailable.length === 0
+            ? null
+            : JSON.stringify({ unavailable: input.unavailable }),
         input.messageText ?? null,
         nowIso(),
       ],
@@ -103,6 +117,7 @@ export const messengerReplyRepository = {
       kind: readEnum(row, 'kind', CUSTOMER_REPLY_KINDS),
       unavailable: parseUnavailable(readNullableString(row, 'details_json')),
       messageText: readNullableString(row, 'message_text'),
+      deliveryFee: parseDeliveryFee(readNullableString(row, 'details_json')),
     }));
   },
 

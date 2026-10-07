@@ -253,6 +253,21 @@ export const messengerApi = {
     return toReplyResult(body);
   },
 
+  /** Frais de livraison convenus : le serveur les enregistre et les annonce au client (sa langue). */
+  async sendDeliveryFee(
+    baseUrl: string,
+    token: string,
+    remoteId: string,
+    deliveryFee: number,
+  ): Promise<{ result: CustomerReplyResult; text: string | null }> {
+    const body = await request(baseUrl, `/v1/orders/${encodeURIComponent(remoteId)}/delivery-fee`, {
+      method: 'POST',
+      body: JSON.stringify({ deliveryFee }),
+      token,
+    });
+    return toReplyResult(body);
+  },
+
   async notifyCustomer(
     baseUrl: string,
     token: string,

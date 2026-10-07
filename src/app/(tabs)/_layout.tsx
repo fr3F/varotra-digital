@@ -59,6 +59,8 @@ export default function TabsLayout() {
         name="orders"
         options={{
           title: tabs.orders,
+          // En-têtes gérés par la pile de l'onglet (liste puis détail).
+          headerShown: false,
           tabBarIcon: icon('receipt-outline', 'receipt'),
           tabBarBadge: newOrders > 0 ? newOrders : undefined,
         }}

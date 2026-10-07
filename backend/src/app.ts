@@ -506,6 +506,12 @@ export function buildApp(deps: AppDeps): CarnetApp {
     return c.json(await c.get('shop').notifications.sendManual(c.req.param('id'), text));
   });
 
+  /** Frais de livraison convenus par le vendeur : enregistrés puis annoncés au client avec le total. */
+  app.post('/v1/orders/:id/delivery-fee', async (c) => {
+    const { deliveryFee } = parseSettings(await jsonBody(c));
+    return c.json(await c.get('shop').notifications.sendDeliveryFee(c.req.param('id'), deliveryFee));
+  });
+
   /** Historique des réponses envoyées au client pour cette commande, et statut qu'il voit. */
   app.get('/v1/orders/:id/replies', async (c) => {
     const { repos, notifications } = c.get('shop');

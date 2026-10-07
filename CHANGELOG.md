@@ -4,7 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 
 ## [Unreleased]
 
+### Ajouté
+- Frais de livraison « à convenir » (hors Antananarivo) : champ sur la fiche commande ; une fois saisis, ils sont enregistrés et envoyés au client sur Messenger avec le total à payer, dans sa langue (POST /v1/orders/:id/delivery-fee, file d'envoi hors ligne, règle des 24 h).
+
 ### Modifié
+- Fiche commande épurée : statut et badges en haut, une carte client (nom vers la fiche, téléphone en grand avec « Appeler », adresse), produits avec frais de livraison et total, puis les actions ; Messenger et historique dans des tiroirs fermés. La barre d'onglets reste visible sur la fiche et la modification d'une commande (pile dans l'onglet Commandes).
 - Réglages en tiroirs (Langue, Messenger, Notifications, Zone de danger) : fermés par défaut, l'en-tête montre un résumé (langue, Page reliée, notifications bloquées).
 - Réglages et pages de connexion Facebook épurés : seulement l'essentiel (plus de paragraphes d'explication, d'adresse du serveur ni d'état des notifications push ; la carte des notifications n'apparaît que si elles sont bloquées).
 
