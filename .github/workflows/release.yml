@@ -19,7 +19,7 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Vérifier la version
         run: |
           version="${GITHUB_REF_NAME#v}"
@@ -51,9 +51,9 @@ jobs:
         if: env.EXPO_TOKEN == ''
         run: >-
           echo "::warning::EXPO_TOKEN non configuré, release publiée sans APK."
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: env.EXPO_TOKEN != ''
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.EXPO_TOKEN != ''
         with:
           node-version: 24
