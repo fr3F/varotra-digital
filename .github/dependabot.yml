@@ -18,6 +18,14 @@ updates:
       - dependency-name: 'react-dom'
       - dependency-name: 'react-native*'
       - dependency-name: '@react-native/*'
+      # TypeScript et ESLint suivent aussi le SDK Expo (expo-doctor, eslint-config-expo) :
+      # pas de version majeure avant le SDK qui la prend en charge.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'eslint-config-expo'
+        update-types: ['version-update:semver-major']
     groups:
       outils-dev:
         dependency-type: development
