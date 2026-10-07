@@ -33,7 +33,9 @@ function instanceFor(env: WorkerEnv): { app: CarnetApp; deps: AppDeps } {
   const messengerClient =
     config.meta.pageAccessToken === null
       ? createSimulatedMessengerClient()
-      : createGraphMessengerClient(config.meta.pageAccessToken, config.meta.graphApiVersion);
+      : createGraphMessengerClient(config.meta.pageAccessToken, config.meta.graphApiVersion, {
+          buttonStyle: config.meta.buttonStyle,
+        });
   const deps: AppDeps = {
     config,
     repos: createRepositories(d1Database(env.DB)),

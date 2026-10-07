@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 
 ## [Unreleased]
 
+### Corrigé
+- Bot Messenger : les boutons s'affichent aussi sur Facebook Lite (boutons dans la bulle — modèle « bouton » — au lieu des réponses rapides, par groupes de 3 ; réglable avec META_BUTTON_STYLE).
+
 ### Ajouté
 - Centre de notifications : cloche 🔔 dans l'en-tête de chaque écran avec pastille des non lues ; historique des événements (nouvelles commandes, livraisons, stock bas ou en rupture, erreurs de synchronisation), un appui ouvre la commande ou le produit ; « Tout marquer comme lu », « Tout effacer ».
 - Accueil : graphique du chiffre d'affaires filtrable — découpage Jours / Semaines / Mois / Années et nombre de périodes saisi librement (champ avec − / +, jusqu'à 90 jours, 52 semaines, 24 mois, 10 ans).

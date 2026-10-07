@@ -12,6 +12,8 @@
   "triggers": { "crons": ["*/30 * * * *"] },
   "vars": {
     "META_GRAPH_API_VERSION": "v25.0",
+    // Boutons du bot : "template" (dans la bulle, visibles sur Facebook Lite) ou "quick_replies".
+    "META_BUTTON_STYLE": "template",
     "BUSINESS_NAME": "Carnet Digital",
     "CONTACT_EMAIL": "",
     "CORS_ORIGINS": "",
