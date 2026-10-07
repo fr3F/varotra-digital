@@ -3,11 +3,12 @@ import { StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { DEFAULT_MESSENGER_BACKEND_URL } from '@/core/constants/app.constants';
 import { useMessages } from '@/core/i18n/i18n';
-import { colors, fontSize, radius, spacing } from '@/core/theme/theme';
+import { colors, fontSize, spacing } from '@/core/theme/theme';
 import { useStore } from '@/core/state/store';
 import { messengerStore } from '@/services/messenger/messenger-state';
 import { messengerSyncService } from '@/services/messenger/messenger-sync.service';
 import { AppButton } from '@/shared/components/AppButton';
+import { Drawer } from '@/shared/components/Drawer';
 import { FormField } from '@/shared/components/FormField';
 import { ErrorBanner } from '@/shared/components/StatusViews';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
@@ -18,21 +19,16 @@ import { settingsMessages } from './settings.messages';
 
 function ToggleRow({
   label,
-  description,
   value,
   onChange,
 }: {
   readonly label: string;
-  readonly description: string;
   readonly value: boolean;
   readonly onChange: (value: boolean) => void;
 }) {
   return (
     <View style={styles.toggleRow}>
-      <View style={styles.toggleTexts}>
-        <Text style={styles.toggleLabel}>{label}</Text>
-        <Text style={styles.muted}>{description}</Text>
-      </View>
+      <Text style={styles.toggleLabel}>{label}</Text>
       <Switch
         accessibilityLabel={label}
         value={value}
@@ -56,6 +52,8 @@ export function MessengerSettingsSection() {
   const { busy, error, run } = useAsyncAction();
 
   const describe = (imported: number, sent: number) => t.syncReport(imported, sent);
+  // Fermé : la Page reliée (ou la boutique) suffit à savoir où l'on en est.
+  const summary = state.connected ? (state.shop?.pageName ?? state.shop?.name ?? null) : null;
 
   const connect = () =>
     run(async () => {
@@ -80,7 +78,7 @@ export function MessengerSettingsSection() {
     run(async () => {
       const linked = await messengerSyncService.connectFacebook();
       const page = messengerStore.get().shop?.pageName ?? '';
-      setReport(linked ? t.pageConnected(page) : t.pageNotConnected);
+      setReport(linked ? t.pageConnected(page) : t.noPage);
     });
 
   const disconnect = async () => {
@@ -91,14 +89,11 @@ export function MessengerSettingsSection() {
   };
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{t.title}</Text>
+    <Drawer title={t.title} icon="chatbubbles-outline" summary={summary}>
       <ErrorBanner message={error} />
 
       {!state.connected ? (
-        <View style={styles.card}>
-          <Text style={styles.muted}>{t.intro}</Text>
-          <View style={styles.spacer} />
+        <View style={styles.block}>
           <FormField
             label={t.serverUrl}
             value={url}
@@ -111,8 +106,7 @@ export function MessengerSettingsSection() {
           <AppButton label={t.connect} onPress={() => void connect()} loading={busy} />
         </View>
       ) : (
-        <View style={styles.card}>
-          <Text style={styles.connected}>{t.connectedTo(state.backendUrl ?? '')}</Text>
+        <View style={styles.block}>
           {state.shop !== null ? (
             <>
               <Text style={styles.shopName}>{t.shopName(state.shop.name)}</Text>
@@ -143,21 +137,16 @@ export function MessengerSettingsSection() {
                 ? t.neverSynced
                 : t.lastSync(formatDisplayDateTime(state.lastSyncAt))}
           </Text>
-          <Text style={styles.muted}>
-            {state.pushActive ? t.pushActive : t.pushInactive}
-          </Text>
           {state.lastError !== null ? <Text style={styles.errorText}>{t.lastError(state.lastError)}</Text> : null}
           {report !== null ? <Text style={styles.report}>{report}</Text> : null}
           <View style={styles.spacer} />
           <ToggleRow
             label={t.autoReply}
-            description={t.autoReplyDescription}
             value={state.autoReply}
             onChange={(value) => void run(() => messengerSyncService.setAutoReply(value))}
           />
           <ToggleRow
             label={t.notifyCustomer}
-            description={t.notifyCustomerDescription}
             value={state.notifyCustomer}
             onChange={(value) => void run(() => messengerSyncService.setNotifyCustomer(value))}
           />
@@ -168,7 +157,6 @@ export function MessengerSettingsSection() {
             onChangeText={setDeliveryFee}
             keyboardType="number-pad"
           />
-          <Text style={styles.muted}>{t.deliveryFeeHint}</Text>
           <AppButton
             label={t.saveDeliveryFee}
             variant="secondary"
@@ -178,40 +166,25 @@ export function MessengerSettingsSection() {
           />
           <View style={styles.actions}>
             <AppButton label={t.syncNow} onPress={() => void syncNow()} loading={busy || state.syncing} />
-            <AppButton
-              label={t.replyHistory}
-              variant="secondary"
-              onPress={() => router.push('/messenger-replies')}
-            />
+            <AppButton label={t.replyHistory} variant="secondary" onPress={() => router.push('/messenger-replies')} />
             <AppButton label={t.disconnect} variant="secondary" onPress={() => void disconnect()} disabled={busy} />
           </View>
         </View>
       )}
-    </View>
+    </Drawer>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: spacing.sm },
-  sectionTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
-  card: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    gap: spacing.xs,
-  },
+  block: { gap: spacing.xs },
   muted: { fontSize: fontSize.sm, color: colors.textMuted },
-  connected: { fontSize: fontSize.md, fontWeight: '700', color: colors.success },
-  shopName: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, marginTop: spacing.xs },
+  shopName: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
   page: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
   warning: { fontSize: fontSize.sm, fontWeight: '600', color: colors.warning },
   errorText: { fontSize: fontSize.sm, color: colors.danger },
   report: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
   spacer: { height: spacing.sm },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
-  toggleTexts: { flex: 1, gap: 2 },
-  toggleLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
+  toggleLabel: { flex: 1, fontSize: fontSize.md, fontWeight: '600', color: colors.text },
   actions: { gap: spacing.sm, marginTop: spacing.md },
 });

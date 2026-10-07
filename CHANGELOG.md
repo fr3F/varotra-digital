@@ -4,7 +4,13 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 
 ## [Unreleased]
 
+### Modifié
+- Réglages en tiroirs (Langue, Messenger, Notifications, Zone de danger) : fermés par défaut, l'en-tête montre un résumé (langue, Page reliée, notifications bloquées).
+- Réglages et pages de connexion Facebook épurés : seulement l'essentiel (plus de paragraphes d'explication, d'adresse du serveur ni d'état des notifications push ; la carte des notifications n'apparaît que si elles sont bloquées).
+
 ### Corrigé
+- « Hiverina amin'ny app » à la fin de la connexion Facebook rouvre l'application aussi dans Expo Go : l'application envoie son adresse de retour (carnetdigital://messenger dans l'APK, exp://… dans Expo Go), le serveur n'accepte que ces deux schémas (migration D1 0008). Les anciennes versions de l'application gardent carnetdigital://messenger.
+- « Se connecter avec Facebook » : on peut choisir une autre Page ou un autre compte Facebook. La page de choix affiche le compte connecté et un bouton « Page hafa na kaonty Facebook hafa », qui retire l'autorisation donnée à l'application puis relance la connexion depuis le début ; avant, Facebook ne renvoyait que la Page cochée la première fois. Autorisation business_management demandée en plus, pour voir aussi les Pages gérées depuis Meta Business Suite.
 - Une boutique porte le nom de la Page Facebook choisie par le vendeur (plus de « Boutique principale ») ; la boutique d'origine reçoit un vrai code d'activation KD-XXXX-XXXX visible dans /admin (migration D1 0007).
 - « Se connecter avec Facebook » : Facebook propose à nouveau le choix des Pages à chaque connexion (auth_type=reauthorize) ; avant, il reprenait en silence la Page choisie la première fois.
 - Bot Messenger lisible sur Facebook Lite (téléphone), qui n'affiche aucune bulle à boutons : le texte part seul avec les choix numérotés (« 1. Kiraro… ✍️ Valio amin'ny laharana »), le client peut répondre « 1 », « 2 »… ; les boutons suivent dans une bulle « 👇 » pour Messenger (META_BUTTON_STYLE=text_first, par défaut ; template et quick_replies restent possibles).

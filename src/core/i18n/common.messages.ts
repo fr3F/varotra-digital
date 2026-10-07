@@ -42,7 +42,6 @@ interface CommonMessages {
   readonly expenseCategory: Labels<ExpenseCategory>;
   readonly movementType: Labels<StockMovementType>;
   readonly notificationType: Labels<NotificationType>;
-  readonly notificationDescription: Labels<NotificationType>;
   readonly customerReply: Labels<CustomerReplyKind>;
   readonly customerReplyResult: Labels<CustomerReplyResult>;
 }
@@ -81,12 +80,6 @@ export const commonMessages = defineMessages<CommonMessages>(
       LOW_STOCK: 'Stock faible',
       ORDER_COMPLETED: 'Commande terminée',
       SYNC_ERROR: 'Erreur de synchronisation',
-    },
-    notificationDescription: {
-      NEW_ORDER: 'À chaque commande reçue sur Messenger.',
-      LOW_STOCK: 'Quand un produit passe sous son seuil d’alerte ou tombe en rupture.',
-      ORDER_COMPLETED: 'Quand une commande est livrée et encaissée.',
-      SYNC_ERROR: 'Quand la synchronisation (Messenger) échoue.',
     },
     customerReply: {
       CONFIRMED: 'Commande confirmée',
@@ -138,12 +131,6 @@ export const commonMessages = defineMessages<CommonMessages>(
         ORDER_COMPLETED: 'Kaomandy vita',
         SYNC_ERROR: 'Olana amin’ny fampifanarahana',
       },
-      notificationDescription: {
-        NEW_ORDER: 'Isaky ny misy kaomandy tonga avy amin’ny Messenger.',
-        LOW_STOCK: 'Rehefa latsaky ny fetra ny tahirin’ny entana iray na lany tanteraka.',
-        ORDER_COMPLETED: 'Rehefa tonga any amin’ny mpividy sy voaloa ny kaomandy.',
-        SYNC_ERROR: 'Rehefa tsy mety ny fampifanarahana amin’ny Messenger.',
-      },
       customerReply: {
         CONFIRMED: 'Kaomandy voamafy',
         UNAVAILABLE: 'Entana tsy misy',
@@ -192,12 +179,6 @@ export const commonMessages = defineMessages<CommonMessages>(
         LOW_STOCK: 'Low stock',
         ORDER_COMPLETED: 'Order completed',
         SYNC_ERROR: 'Sync error',
-      },
-      notificationDescription: {
-        NEW_ORDER: 'For every order received on Messenger.',
-        LOW_STOCK: 'When a product goes below its alert level or runs out.',
-        ORDER_COMPLETED: 'When an order is delivered and paid.',
-        SYNC_ERROR: 'When syncing with Messenger fails.',
       },
       customerReply: {
         CONFIRMED: 'Order confirmed',

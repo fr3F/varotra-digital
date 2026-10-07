@@ -123,23 +123,32 @@ export function createShopRepository(db: SqlDb, now: () => Date = () => new Date
     },
 
     /** Démarre une connexion Facebook pour la boutique ; l'identifiant sert de « state » OAuth. */
-    async startOAuth(shopId: string): Promise<string> {
+    async startOAuth(shopId: string, returnUrl: string | null = null): Promise<string> {
       const id = `${randomUUID()}${randomUUID()}`.replace(/-/g, '');
-      await db.run('INSERT INTO oauth_sessions (id, shop_id, created_at, expires_at) VALUES (?, ?, ?, ?)', [
+      await db.run('INSERT INTO oauth_sessions (id, shop_id, return_url, created_at, expires_at) VALUES (?, ?, ?, ?, ?)', [
         id,
         shopId,
+        returnUrl,
         iso(),
         new Date(now().getTime() + OAUTH_SESSION_MS).toISOString(),
       ]);
       return id;
     },
-    /** Connexion Facebook encore valide : boutique et jeton utilisateur (après le retour de Facebook). */
-    async findOAuth(id: string): Promise<{ shopId: string; userToken: string | null } | null> {
-      const row = await db.first('SELECT shop_id, user_token FROM oauth_sessions WHERE id = ? AND expires_at > ?', [
-        id,
-        iso(),
-      ]);
-      return row === null ? null : { shopId: readString(row, 'shop_id'), userToken: readNullableString(row, 'user_token') };
+    /** Connexion Facebook encore valide : boutique, jeton utilisateur (après le retour de Facebook), adresse de retour. */
+    async findOAuth(
+      id: string,
+    ): Promise<{ shopId: string; userToken: string | null; returnUrl: string | null } | null> {
+      const row = await db.first(
+        'SELECT shop_id, user_token, return_url FROM oauth_sessions WHERE id = ? AND expires_at > ?',
+        [id, iso()],
+      );
+      return row === null
+        ? null
+        : {
+            shopId: readString(row, 'shop_id'),
+            userToken: readNullableString(row, 'user_token'),
+            returnUrl: readNullableString(row, 'return_url'),
+          };
     },
     async setOAuthUserToken(id: string, userToken: string): Promise<void> {
       await db.run('UPDATE oauth_sessions SET user_token = ? WHERE id = ?', [userToken, id]);
