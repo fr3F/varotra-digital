@@ -125,7 +125,8 @@ La boutique `default` reprend les données d'avant (ancien code d'appairage `APP
   `https://…workers.dev/webhooks/messenger` ; chaque Page reliée s'y abonne automatiquement.
 - **App Review** : `pages_messaging`, `pages_show_list`, `pages_manage_metadata`, `business_management` en accès avancé,
   et vérification de l'entreprise. Sans elles, seuls les comptes ajoutés comme testeurs de
-  l'application Meta peuvent se connecter.
+  l'application Meta peuvent se connecter. Textes du formulaire, vidéo et liste de contrôle :
+  [docs/meta-app-review.md](../docs/meta-app-review.md).
 
 ## Sécurité
 

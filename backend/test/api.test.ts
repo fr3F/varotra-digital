@@ -504,6 +504,9 @@ describe('API de l’application', () => {
     assert.match(String(privacy.headers['content-type'] ?? ''), /text\/html/);
     assert.match(privacy.body, /Boutique &lt;Rasoa&gt;/, 'nom échappé');
     assert.match(privacy.body, /mailto:contact@exemple\.mg/);
+    // Ce que l'App Review vérifie : livraison demandée par le bot et données des boutiques.
+    assert.match(privacy.body, /téléphone et l’adresse de livraison/);
+    assert.match(privacy.body, /jeton d’accès de cette Page/);
     const deletion = await app.inject({ url: '/data-deletion' });
     assert.equal(deletion.statusCode, 200);
     assert.match(deletion.body, /Suppression de vos données/);
