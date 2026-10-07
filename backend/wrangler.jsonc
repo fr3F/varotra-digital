@@ -19,7 +19,7 @@
     // "template" (boutons dans la bulle) ou "quick_replies".
     "META_BUTTON_STYLE": "text_first",
     "BUSINESS_NAME": "Carnet Digital",
-    "CONTACT_EMAIL": "",
+    "CONTACT_EMAIL": "frazakarivony.dev@gmail.com",
     "CORS_ORIGINS": "",
     "DEV_TOOLS": "false",
     // Dernière APK (lien « Download » du build EAS) : https://…workers.dev/apk y redirige.
