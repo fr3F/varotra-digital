@@ -8,6 +8,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 - Bot Messenger lisible sur Facebook Lite (téléphone), qui n'affiche aucune bulle à boutons : le texte part seul avec les choix numérotés (« 1. Kiraro… ✍️ Valio amin'ny laharana »), le client peut répondre « 1 », « 2 »… ; les boutons suivent dans une bulle « 👇 » pour Messenger (META_BUTTON_STYLE=text_first, par défaut ; template et quick_replies restent possibles).
 
 ### Ajouté
+- Guide de démarrage au premier lancement après l'installation (malgache, français, anglais) : bienvenue, produits, liaison de la Page Facebook, prise de commande par le bot, suivi et livraison ; « Passer » à tout moment ; il ne s'affiche plus ensuite.
 - Centre de notifications : cloche 🔔 dans l'en-tête de chaque écran avec pastille des non lues ; historique des événements (nouvelles commandes, livraisons, stock bas ou en rupture, erreurs de synchronisation), un appui ouvre la commande ou le produit ; « Tout marquer comme lu », « Tout effacer ».
 - Accueil : graphique du chiffre d'affaires filtrable — découpage Jours / Semaines / Mois / Années et nombre de périodes saisi librement (champ avec − / +, jusqu'à 90 jours, 52 semaines, 24 mois, 10 ans).
 - Application en malgache, français et anglais : bouton langue (drapeaux 🇲🇬 🇫🇷 🇬🇧) en haut de chaque écran et Réglages › Langue ; langue du téléphone par défaut, choix enregistré.
