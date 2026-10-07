@@ -14,7 +14,7 @@
     "META_GRAPH_API_VERSION": "v25.0",
     // Identifiant de l'application Meta (Paramètres > Général) : active « Se connecter avec Facebook »
     // pour que chaque boutique relie sa propre Page. Vide : désactivé.
-    "META_APP_ID": "",
+    "META_APP_ID": "1410679937246801",
     // Boutons du bot : "text_first" (texte numéroté lisible sur Facebook Lite, puis boutons),
     // "template" (boutons dans la bulle) ou "quick_replies".
     "META_BUTTON_STYLE": "text_first",
