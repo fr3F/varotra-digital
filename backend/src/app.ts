@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { type Context, Hono } from 'hono';
 import { ADMIN_HTML } from './api/admin-page.ts';
-import { choosePageHtml, connectedHtml, errorHtml } from './api/connect-pages.ts';
+import { choosePageHtml, connectedHtml, errorHtml, parseReturnUrl } from './api/connect-pages.ts';
 import { dataDeletionHtml, privacyPolicyHtml } from './api/legal-pages.ts';
 import {
   BadRequestError,
@@ -287,16 +287,17 @@ export function buildApp(deps: AppDeps): CarnetApp {
     const code = c.req.query('code');
     if (code === undefined) {
       await shops.endOAuth(state);
-      return c.html(errorHtml('Nofoanana ny fidirana Facebook.'));
+      return c.html(errorHtml('Nofoanana ny fidirana Facebook.', session.returnUrl));
     }
     const shop = await shops.findById(session.shopId);
     try {
       const userToken = await facebook.exchangeCode(code, callbackUrl(c));
       await shops.setOAuthUserToken(state, userToken);
-      return c.html(choosePageHtml(shop?.name ?? '', state, await facebook.listPages(userToken)));
+      const [pages, accountName] = await Promise.all([facebook.listPages(userToken), facebook.userName(userToken)]);
+      return c.html(choosePageHtml(state, pages, accountName));
     } catch (error: unknown) {
       logger.error(`Connexion Facebook (${shop?.name ?? session.shopId}) : ${error instanceof Error ? error.message : String(error)}`);
-      return c.html(errorHtml(error instanceof FacebookOAuthError ? error.message : 'Nisy olana. Avereno.'), 502);
+      return c.html(errorHtml(error instanceof FacebookOAuthError ? error.message : 'Nisy olana. Avereno.', session.returnUrl), 502);
     }
   });
 
@@ -312,19 +313,41 @@ export function buildApp(deps: AppDeps): CarnetApp {
     try {
       const page = (await facebook.listPages(session.userToken)).find((candidate) => candidate.id === pageId);
       if (page === undefined) {
-        return c.html(errorHtml('Tsy hita io Page io.'), 400);
+        return c.html(errorHtml('Tsy hita io Page io.', session.returnUrl), 400);
       }
       await shops.linkPage(session.shopId, page);
       await facebook.subscribePage(page);
       await shops.endOAuth(state);
       logger.info(`Boutique ${session.shopId} reliée à la Page ${page.name}.`);
-      return c.html(connectedHtml(page.name));
+      return c.html(connectedHtml(page.name, session.returnUrl));
     } catch (error: unknown) {
       if (error instanceof PageAlreadyLinkedError || error instanceof FacebookOAuthError) {
-        return c.html(errorHtml(error.message), 409);
+        return c.html(errorHtml(error.message, session.returnUrl), 409);
       }
       throw error;
     }
+  });
+
+  /**
+   * « Page hafa na kaonty hafa » : Facebook ne donne que les Pages cochées à la connexion précédente.
+   * On retire l'autorisation de l'application puis on relance la connexion, qui repart de zéro.
+   */
+  app.post('/connect/facebook/other', async (c) => {
+    const form = await c.req.parseBody();
+    const state = typeof form['state'] === 'string' ? form['state'] : '';
+    const session = state.length > 0 ? await shops.findOAuth(state) : null;
+    if (facebook === null || session === null) {
+      return c.html(errorHtml('Lany ny fotoana. Avereno avy ao amin’ny app.'), 400);
+    }
+    if (session.userToken !== null) {
+      // Échec sans gravité (jeton déjà révoqué…) : la connexion est relancée quand même.
+      await facebook.revokeApp(session.userToken).catch((error: unknown) => {
+        logger.error(`Retrait de l'autorisation Facebook : ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+    await shops.endOAuth(state);
+    const next = await shops.startOAuth(session.shopId, session.returnUrl);
+    return c.redirect(facebook.loginUrl(callbackUrl(c), next), 303);
   });
 
   // --- Administration (vendeur de l'application) ----------------------------------------------
@@ -437,7 +460,10 @@ export function buildApp(deps: AppDeps): CarnetApp {
     if (facebook === null) {
       return c.json({ error: 'Connexion Facebook non configurée sur ce serveur (META_APP_ID).' }, 503);
     }
-    const state = await shops.startOAuth(c.get('shop').shop.id);
+    // Corps facultatif : les anciennes versions de l'application envoient {}.
+    const body: unknown = await c.req.json<unknown>().catch(() => null);
+    const returnUrl = parseReturnUrl(body);
+    const state = await shops.startOAuth(c.get('shop').shop.id, returnUrl);
     return c.json({ url: facebook.loginUrl(callbackUrl(c), state) });
   });
 

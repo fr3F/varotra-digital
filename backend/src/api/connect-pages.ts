@@ -8,6 +8,21 @@ import { escapeHtml } from './legal-pages.ts';
 /** Adresse qui rouvre l'application (schéma déclaré dans app.json). */
 export const APP_RETURN_URL = 'carnetdigital://messenger';
 
+/**
+ * Adresse de retour envoyée par l'application ({ returnUrl }) : son schéma (APK) ou exp://… (Expo
+ * Go, qui ne connaît pas carnetdigital://). Toute autre adresse est refusée (pas de redirection ouverte).
+ */
+export function parseReturnUrl(body: unknown): string | null {
+  const value = typeof body === 'object' && body !== null ? (body as { returnUrl?: unknown }).returnUrl : null;
+  return typeof value === 'string' && value.length <= 300 && /^(carnetdigital|exps?):\/\/[^\s"'<>]*$/.test(value)
+    ? value
+    : null;
+}
+
+function returnLink(returnUrl: string, connected: boolean): string {
+  return `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}connected=${connected ? 1 : 0}`;
+}
+
 function layout(title: string, body: string, extraHead = ''): string {
   return `<!doctype html>
 <html lang="mg">
@@ -23,6 +38,7 @@ ${extraHead}
   button, .button { display: block; width: 100%; box-sizing: border-box; margin: 12px 0; padding: 16px; border: 0; border-radius: 12px;
     background: #A3161D; color: #fff; font-size: 1.05rem; font-weight: 700; text-align: center; text-decoration: none; }
   .page { background: #fff; color: #1f2933; border: 2px solid #A3161D; }
+  .secondary { background: transparent; color: #A3161D; text-decoration: underline; }
   .error { color: #b42318; font-weight: 600; }
 </style>
 </head>
@@ -33,10 +49,26 @@ ${body}
 }
 
 /** Choix de la Page à relier à la boutique. */
-export function choosePageHtml(shopName: string, state: string, pages: readonly FacebookPage[]): string {
+export function choosePageHtml(
+  state: string,
+  pages: readonly FacebookPage[],
+  accountName: string | null = null,
+): string {
+  const account =
+    accountName === null ? '' : `<p class="muted">Kaonty Facebook: <strong>${escapeHtml(accountName)}</strong></p>`;
+  // Facebook ne renvoie que les Pages cochées lors de la connexion : ce bouton efface l'autorisation
+  // et relance la connexion, pour cocher une autre Page ou passer à un autre compte.
+  const other = `<form method="post" action="/connect/facebook/other">
+  <input type="hidden" name="state" value="${escapeHtml(state)}">
+  <button class="secondary" type="submit">Page hafa na kaonty Facebook hafa</button>
+</form>`;
   if (pages.length === 0) {
-    return errorHtml(
-      'Tsy nahitana Page Facebook tantanao. Ataovy azo antoka fa admin amin’ny Page ianao, ary nekenao ny alalana rehetra.',
+    return layout(
+      'Tsy misy Page',
+      `<h1>Tsy nahitana Page</h1>
+${account}
+<p class="error">Mariho ny Page ao amin’ny Facebook.</p>
+${other}`,
     );
   }
   const buttons = pages
@@ -51,27 +83,30 @@ export function choosePageHtml(shopName: string, state: string, pages: readonly 
   return layout(
     'Safidio ny Page',
     `<h1>Safidio ny Page Facebook</h1>
-<p class="muted">Fivarotana: <strong>${escapeHtml(shopName)}</strong>. Ny bot no hamaly ny mpanjifa mandefa hafatra amin’io Page io.</p>
-${buttons}`,
+${account}
+${buttons}
+${other}`,
   );
 }
 
 /** Page reliée : retour automatique dans l'application. */
-export function connectedHtml(pageName: string): string {
+/** returnUrl : adresse envoyée par l'application (null : celle de l'APK). */
+export function connectedHtml(pageName: string, returnUrl: string | null = null): string {
+  const back = escapeHtml(returnLink(returnUrl ?? APP_RETURN_URL, true));
   return layout(
     'Vita',
     `<h1>Vita ✅</h1>
-<p>Mifandray amin’ny Page <strong>${escapeHtml(pageName)}</strong> izao ny fivarotanao.</p>
-<a class="button" href="${APP_RETURN_URL}?connected=1">Hiverina amin’ny app</a>`,
-    `<meta http-equiv="refresh" content="1;url=${APP_RETURN_URL}?connected=1">`,
+<p><strong>${escapeHtml(pageName)}</strong></p>
+<a class="button" href="${back}">Hiverina amin’ny app</a>`,
+    `<meta http-equiv="refresh" content="1;url=${back}">`,
   );
 }
 
-export function errorHtml(message: string): string {
+export function errorHtml(message: string, returnUrl: string | null = null): string {
   return layout(
     'Tsy vita',
     `<h1>Tsy vita ny fampifandraisana</h1>
 <p class="error">${escapeHtml(message)}</p>
-<a class="button" href="${APP_RETURN_URL}?connected=0">Hiverina amin’ny app</a>`,
+<a class="button" href="${escapeHtml(returnLink(returnUrl ?? APP_RETURN_URL, false))}">Hiverina amin’ny app</a>`,
   );
 }

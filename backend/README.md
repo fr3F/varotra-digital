@@ -123,7 +123,7 @@ La boutique `default` reprend les données d'avant (ancien code d'appairage `APP
   `https://…workers.dev/connect/facebook/callback`.
 - Webhook Messenger de l'application (objet `page`, champs `messages`, `messaging_postbacks`) :
   `https://…workers.dev/webhooks/messenger` ; chaque Page reliée s'y abonne automatiquement.
-- **App Review** : `pages_messaging`, `pages_show_list`, `pages_manage_metadata` en accès avancé,
+- **App Review** : `pages_messaging`, `pages_show_list`, `pages_manage_metadata`, `business_management` en accès avancé,
   et vérification de l'entreprise. Sans elles, seuls les comptes ajoutés comme testeurs de
   l'application Meta peuvent se connecter.
 

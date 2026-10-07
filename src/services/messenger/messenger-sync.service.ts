@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { DEFAULT_DELIVERY_FEE } from '@/core/constants/app.constants';
 import { toErrorMessage, ValidationError } from '@/core/errors/app-error';
@@ -31,8 +32,6 @@ const KEYS = {
   deliveryFeeSent: `${PREFIX}deliveryFeeSent`,
 } as const;
 
-/** Adresse de retour dans l'application à la fin de « Se connecter avec Facebook » (schéma app.json). */
-const FACEBOOK_RETURN_URL = 'carnetdigital://messenger';
 
 /** Plafond aligné sur le serveur : protège contre une faute de frappe. */
 const MAX_DELIVERY_FEE = 1_000_000;
@@ -263,8 +262,11 @@ export const messengerSyncService = {
     if (target === null) {
       throw new ValidationError('Saisissez d’abord votre code d’activation.');
     }
-    const url = await messengerApi.facebookConnectUrl(target.baseUrl, target.token);
-    await WebBrowser.openAuthSessionAsync(url, FACEBOOK_RETURN_URL);
+    // Adresse de retour (route /messenger) : carnetdigital://messenger dans l'APK, exp://…/--/messenger
+    // dans Expo Go, qui ne connaît pas le schéma de app.json.
+    const returnUrl = Linking.createURL('messenger');
+    const url = await messengerApi.facebookConnectUrl(target.baseUrl, target.token, returnUrl);
+    await WebBrowser.openAuthSessionAsync(url, returnUrl);
     const shop = await messengerApi.shop(target.baseUrl, target.token);
     update({ shop });
     if (shop.pageLinked) {

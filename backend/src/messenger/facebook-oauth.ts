@@ -15,16 +15,27 @@ export interface FacebookOAuth {
   loginUrl(redirectUri: string, state: string): string;
   /** Code renvoyé par Facebook → jeton utilisateur longue durée. */
   exchangeCode(code: string, redirectUri: string): Promise<string>;
+  /** Nom du compte Facebook connecté (null si Facebook ne le donne pas). */
+  userName(userToken: string): Promise<string | null>;
   /** Pages que le vendeur administre. */
   listPages(userToken: string): Promise<FacebookPage[]>;
+  /**
+   * Retire l'autorisation donnée à l'application : la connexion suivante repart de zéro (choix
+   * du compte et des Pages), au lieu de reprendre en silence les Pages choisies la fois précédente.
+   */
+  revokeApp(userToken: string): Promise<void>;
   /** Abonne la Page au webhook de l'application (messages et boutons). */
   subscribePage(page: FacebookPage): Promise<void>;
 }
 
 export class FacebookOAuthError extends Error {}
 
-/** Autorisations demandées : lister les Pages, lire et envoyer leurs messages, s'abonner au webhook. */
-export const FACEBOOK_SCOPES = ['pages_show_list', 'pages_messaging', 'pages_manage_metadata'] as const;
+/**
+ * Autorisations demandées : lister les Pages, lire et envoyer leurs messages, s'abonner au webhook.
+ * business_management : sans lui, Facebook ne renvoie pas les Pages gérées depuis un portefeuille
+ * Business (Meta Business Suite).
+ */
+export const FACEBOOK_SCOPES = ['pages_show_list', 'pages_messaging', 'pages_manage_metadata', 'business_management'] as const;
 
 const TIMEOUT_MS = 15_000;
 
@@ -87,6 +98,12 @@ export function createFacebookOAuth(options: {
       return accessToken({ grant_type: 'fb_exchange_token', fb_exchange_token: shortLived });
     },
 
+    async userName(userToken) {
+      const query = new URLSearchParams({ fields: 'name', access_token: userToken });
+      const body = await call(`${graph}/me?${query.toString()}`).catch(() => null);
+      return typeof body?.['name'] === 'string' ? body['name'] : null;
+    },
+
     async listPages(userToken) {
       const query = new URLSearchParams({ fields: 'id,name,access_token', limit: '100', access_token: userToken });
       const body = await call(`${graph}/me/accounts?${query.toString()}`);
@@ -99,6 +116,11 @@ export function createFacebookOAuth(options: {
           ? [{ id: page['id'], name: page['name'], accessToken: page['access_token'] }]
           : [],
       );
+    },
+
+    async revokeApp(userToken) {
+      const query = new URLSearchParams({ access_token: userToken });
+      await call(`${graph}/me/permissions?${query.toString()}`, { method: 'DELETE' });
     },
 
     async subscribePage(page) {

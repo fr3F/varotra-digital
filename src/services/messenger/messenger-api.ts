@@ -199,9 +199,16 @@ export const messengerApi = {
     return shop;
   },
 
-  /** Adresse de « Se connecter avec Facebook » (fenêtre ouverte dans le navigateur). */
-  async facebookConnectUrl(baseUrl: string, token: string): Promise<string> {
-    const body = await request(baseUrl, '/v1/facebook/connect', { method: 'POST', body: '{}', token });
+  /**
+   * Adresse de « Se connecter avec Facebook » (fenêtre ouverte dans le navigateur). returnUrl : adresse
+   * qui rouvre l'application à la fin (carnetdigital://… dans l'APK, exp://… dans Expo Go).
+   */
+  async facebookConnectUrl(baseUrl: string, token: string, returnUrl: string): Promise<string> {
+    const body = await request(baseUrl, '/v1/facebook/connect', {
+      method: 'POST',
+      body: JSON.stringify({ returnUrl }),
+      token,
+    });
     const url = isRecord(body) ? str(body['url']) : null;
     if (url === null) {
       throw new MessengerApiError('Réponse inattendue du serveur (connexion Facebook).', null);

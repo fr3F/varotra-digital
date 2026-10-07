@@ -505,15 +505,21 @@ describe('plusieurs boutiques (une Page Facebook chacune)', () => {
   const PAGE_B: FacebookPage = { id: 'PAGE-B', name: 'Rakoto Shop', accessToken: 'jeton-page-b' };
 
   /** Facebook simulé : le vendeur administre la Page B. */
-  function fakeFacebook(subscribed: string[]): FacebookOAuth {
+  function fakeFacebook(subscribed: string[], revoked: string[] = []): FacebookOAuth {
     return {
       loginUrl: (redirectUri, state) => `https://facebook.test/dialog?redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`,
       async exchangeCode(code) {
         assert.equal(code, 'code-fb');
         return 'jeton-utilisateur';
       },
+      async userName() {
+        return 'Rakoto Jean';
+      },
       async listPages() {
         return [PAGE_B];
+      },
+      async revokeApp(userToken) {
+        revoked.push(userToken);
       },
       async subscribePage(page) {
         subscribed.push(page.id);
@@ -631,6 +637,62 @@ describe('plusieurs boutiques (une Page Facebook chacune)', () => {
     // Sans META_APP_ID : pas de connexion Facebook.
     const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
     assert.equal((await ctx.app.inject({ method: 'POST', url: '/v1/facebook/connect', headers: auth })).statusCode, 503);
+  });
+
+  it('« Page hafa na kaonty hafa » retire l’autorisation et relance la connexion Facebook', async () => {
+    const revoked: string[] = [];
+    const ctx = setup(undefined, fakeFacebook([], revoked));
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    const { url } = (await ctx.app.inject({ method: 'POST', url: '/v1/facebook/connect', headers: auth })).json<{ url: string }>();
+    const state = new URL(url).searchParams.get('state') ?? '';
+    const choose = await ctx.app.inject({ url: `/connect/facebook/callback?code=code-fb&state=${state}` });
+    assert.match(choose.body, /Rakoto Jean/);
+    assert.match(choose.body, /action="\/connect\/facebook\/other"/);
+
+    const other = await ctx.app.inject({
+      method: 'POST',
+      url: '/connect/facebook/other',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ state }).toString(),
+    });
+    assert.equal(other.statusCode, 303);
+    assert.deepEqual(revoked, ['jeton-utilisateur']);
+    const next = new URL(other.headers['location'] ?? '');
+    assert.equal(next.origin, 'https://facebook.test');
+    const nextState = next.searchParams.get('state') ?? '';
+    assert.notEqual(nextState, state);
+    // L'ancienne connexion est close, la nouvelle mène de nouveau au choix de la Page.
+    const stale = await ctx.app.inject({
+      method: 'POST',
+      url: '/connect/facebook/page',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ state, pageId: PAGE_B.id }).toString(),
+    });
+    assert.equal(stale.statusCode, 400);
+    const again = await ctx.app.inject({ url: `/connect/facebook/callback?code=code-fb&state=${nextState}` });
+    assert.match(again.body, /Rakoto Shop/);
+  });
+
+  it('le bouton final rouvre l’application à l’adresse qu’elle a donnée (Expo Go), jamais ailleurs', async () => {
+    const ctx = setup(undefined, fakeFacebook([]));
+    const auth = { authorization: `Bearer ${await pair(ctx.app)}` };
+    const connect = async (returnUrl: string) => {
+      const { url } = (
+        await ctx.app.inject({ method: 'POST', url: '/v1/facebook/connect', headers: auth, payload: { returnUrl } })
+      ).json<{ url: string }>();
+      const state = new URL(url).searchParams.get('state') ?? '';
+      await ctx.app.inject({ url: `/connect/facebook/callback?code=code-fb&state=${state}` });
+      const linked = await ctx.app.inject({
+        method: 'POST',
+        url: '/connect/facebook/page',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams({ state, pageId: PAGE_B.id }).toString(),
+      });
+      return linked.body;
+    };
+    assert.match(await connect('exp://192.168.1.20:8081/--/messenger'), /href="exp:\/\/192\.168\.1\.20:8081\/--\/messenger\?connected=1"/);
+    // Adresse web refusée : retour vers l'application installée.
+    assert.match(await connect('https://evil.example/'), /href="carnetdigital:\/\/messenger\?connected=1"/);
   });
 
   it('une Page déjà reliée à une boutique ne peut pas l’être à une autre', async () => {
