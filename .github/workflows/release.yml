@@ -53,7 +53,7 @@ jobs:
           echo "::warning::EXPO_TOKEN non configuré, release publiée sans APK."
       - uses: actions/checkout@v7
         if: env.EXPO_TOKEN != ''
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.EXPO_TOKEN != ''
         with:
           node-version: 24
