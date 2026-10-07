@@ -11,6 +11,7 @@ import {
   isOrderDeletable,
   isOrderEditable,
   Order,
+  OrderDelivery,
   OrderDetail,
   OrderDraft,
   OrderInput,
@@ -33,6 +34,8 @@ export interface ImportedOrderOrigin {
   readonly customerMessage: string | null;
   readonly needsReview: boolean;
   readonly orderedAt: IsoDateString;
+  /** Téléphone, adresse et frais annoncés par le bot. */
+  readonly delivery: OrderDelivery | null;
 }
 
 /** État réactif partagé de la liste des commandes. */
@@ -52,6 +55,7 @@ function toInput(order: Order): OrderInput {
     needsReview: order.needsReview,
     notes: order.notes,
     orderedAt: order.orderedAt,
+    delivery: order.delivery,
   };
 }
 
@@ -145,6 +149,7 @@ export const orderService = {
           needsReview: origin !== undefined && (origin.needsReview || lines.length === 0),
           notes: draft.notes,
           orderedAt: origin?.orderedAt ?? now.toISOString(),
+          delivery: origin?.delivery ?? null,
         },
         tx,
       );

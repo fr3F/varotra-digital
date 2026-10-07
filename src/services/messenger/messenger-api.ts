@@ -1,5 +1,12 @@
 import { AppError } from '@/core/errors/app-error';
-import { CustomerReplyKind, CustomerReplyResult, RemoteOrder, RemoteOrderItem, UnavailableItem } from '@/models';
+import {
+  CustomerReplyKind,
+  CustomerReplyResult,
+  RemoteDelivery,
+  RemoteOrder,
+  RemoteOrderItem,
+  UnavailableItem,
+} from '@/models';
 
 /** Erreur réseau ou serveur lors d'un échange avec le backend Messenger. */
 export class MessengerApiError extends AppError {
@@ -79,7 +86,32 @@ export function parseRemoteOrder(value: unknown): RemoteOrder | null {
     rawText: str(value['rawText']),
     needsReview: value['needsReview'] === true,
     receivedAt,
+    delivery: parseDelivery(value['delivery']),
   };
+}
+
+/** Coordonnées de livraison ; null si absentes ou mal formées (la commande reste importable). */
+function parseDelivery(value: unknown): RemoteDelivery | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const phone = str(value['phone']);
+  const address = str(value['address']);
+  const zone = value['zone'];
+  if (phone === null || address === null || (zone !== 'TANA' && zone !== 'OTHER')) {
+    return null;
+  }
+  return { phone, address, zone, fee: num(value['fee']) };
+}
+
+/** Résultat d'un envoi au client renvoyé par le serveur (notification ou message du vendeur). */
+function toReplyResult(body: unknown): { result: CustomerReplyResult; text: string | null } {
+  const text = isRecord(body) ? str(body['text']) : null;
+  if (isRecord(body) && body['delivered'] === true) {
+    return { result: 'DELIVERED', text };
+  }
+  const reason = isRecord(body) ? body['reason'] : null;
+  return { result: reason === 'OUTSIDE_WINDOW' || reason === 'UNKNOWN_ORDER' ? reason : 'SEND_FAILED', text };
 }
 
 /** Normalise l'adresse saisie (sans « / » final). */
@@ -137,6 +169,11 @@ export const messengerApi = {
     await request(baseUrl, '/v1/devices/push-token', { method: 'PUT', body: JSON.stringify({ pushToken }), token });
   },
 
+  /** Frais de livraison dans Antananarivo annoncés par le bot. */
+  async setDeliveryFee(baseUrl: string, token: string, deliveryFee: number): Promise<void> {
+    await request(baseUrl, '/v1/settings', { method: 'PUT', body: JSON.stringify({ deliveryFee }), token });
+  },
+
   async pushCatalog(baseUrl: string, token: string, products: readonly CatalogEntry[]): Promise<void> {
     await request(baseUrl, '/v1/catalog', { method: 'PUT', body: JSON.stringify({ products }), token });
   },
@@ -154,6 +191,21 @@ export const messengerApi = {
   },
 
   /** Demande au backend de prévenir le client ; renvoie le résultat et le texte envoyé. */
+  /** Message écrit par le vendeur, envoyé tel quel au client de la commande. */
+  async sendMessage(
+    baseUrl: string,
+    token: string,
+    remoteId: string,
+    text: string,
+  ): Promise<{ result: CustomerReplyResult; text: string | null }> {
+    const body = await request(baseUrl, `/v1/orders/${encodeURIComponent(remoteId)}/message`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+      token,
+    });
+    return toReplyResult(body);
+  },
+
   async notifyCustomer(
     baseUrl: string,
     token: string,
@@ -166,11 +218,6 @@ export const messengerApi = {
       body: JSON.stringify(unavailable.length > 0 ? { event: kind, unavailable } : { event: kind }),
       token,
     });
-    const text = isRecord(body) ? str(body['text']) : null;
-    if (isRecord(body) && body['delivered'] === true) {
-      return { result: 'DELIVERED', text };
-    }
-    const reason = isRecord(body) ? body['reason'] : null;
-    return { result: reason === 'OUTSIDE_WINDOW' || reason === 'UNKNOWN_ORDER' ? reason : 'SEND_FAILED', text };
+    return toReplyResult(body);
   },
 };

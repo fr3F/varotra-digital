@@ -50,6 +50,17 @@ interface OrdersMessages {
   readonly badgeReview: string;
   readonly badgeStockOk: string;
   readonly badgeShortage: string;
+  readonly deliveryTitle: string;
+  readonly deliveryPhone: string;
+  readonly deliveryAddress: string;
+  readonly deliveryFeeTana: (fee: string) => string;
+  readonly deliveryFeeToAgree: string;
+  readonly totalWithDelivery: string;
+  readonly callCustomer: string;
+  readonly writeToCustomer: string;
+  readonly writeToCustomerHint: string;
+  readonly messagePlaceholder: string;
+  readonly sendMessage: string;
   readonly messengerTitle: string;
   readonly messengerReview: string;
   readonly messengerShortage: string;
@@ -115,6 +126,17 @@ export const ordersMessages = defineMessages<OrdersMessages>(
     badgeReview: 'À vérifier',
     badgeStockOk: 'Stock OK',
     badgeShortage: 'Stock insuffisant',
+    deliveryTitle: '🚚 Livraison',
+    deliveryPhone: 'Téléphone',
+    deliveryAddress: 'Adresse',
+    deliveryFeeTana: (fee) => `Frais de livraison (Antananarivo) : ${fee}`,
+    deliveryFeeToAgree: 'Hors d’Antananarivo : frais à convenir — appelez le client.',
+    totalWithDelivery: 'Total avec livraison',
+    callCustomer: '📞 Appeler le client',
+    writeToCustomer: '✉️ Écrire au client',
+    writeToCustomerHint: 'Le message part sur son Messenger. Possible pendant 24 h après son dernier message.',
+    messagePlaceholder: 'Ex. : Votre commande arrive demain matin.',
+    sendMessage: 'Envoyer',
     messengerTitle: 'Commande reçue via Messenger',
     messengerReview: 'À vérifier : complétez ou corrigez les produits avec « Modifier la commande », puis validez-la.',
     messengerShortage: 'Stock insuffisant pour au moins un produit : la validation sera refusée.',
@@ -179,6 +201,17 @@ export const ordersMessages = defineMessages<OrdersMessages>(
       badgeReview: 'Hojerena',
       badgeStockOk: 'Ampy ny tahiry',
       badgeShortage: 'Tsy ampy ny tahiry',
+      deliveryTitle: '🚚 Fanaterana',
+      deliveryPhone: 'Laharana finday',
+      deliveryAddress: 'Adiresy',
+      deliveryFeeTana: (fee) => `Saran’ny fanaterana (Antananarivo): ${fee}`,
+      deliveryFeeToAgree: 'Ivelan’i Antananarivo: resaho amin’ny mpanjifa ny saran’ny fanaterana (antsoy izy).',
+      totalWithDelivery: 'Totaly miaraka amin’ny fanaterana',
+      callCustomer: '📞 Antsoy ny mpanjifa',
+      writeToCustomer: '✉️ Hanoratra amin’ny mpanjifa',
+      writeToCustomerHint: 'Lasa any amin’ny Messenger-ny ny hafatra. Azo atao ao anatin’ny 24 ora aorian’ny hafatra farany nalefany.',
+      messagePlaceholder: 'Ohatra: Ho tonga rahampitso maraina ny entanao.',
+      sendMessage: 'Alefaso',
       messengerTitle: 'Kaomandy tonga tamin’ny Messenger',
       messengerReview: 'Hojerena : fenoy na ahitsio ny entana amin’ny « Hanova ny kaomandy », avy eo hamafiso.',
       messengerShortage: 'Tsy ampy ny tahirin’ny entana iray farafahakeliny : tsy ho azo hamafisina.',
@@ -242,6 +275,17 @@ export const ordersMessages = defineMessages<OrdersMessages>(
       badgeReview: 'To check',
       badgeStockOk: 'Stock OK',
       badgeShortage: 'Low stock',
+      deliveryTitle: '🚚 Delivery',
+      deliveryPhone: 'Phone',
+      deliveryAddress: 'Address',
+      deliveryFeeTana: (fee) => `Delivery fee (Antananarivo): ${fee}`,
+      deliveryFeeToAgree: 'Outside Antananarivo: fee to agree — call the customer.',
+      totalWithDelivery: 'Total with delivery',
+      callCustomer: '📞 Call the customer',
+      writeToCustomer: '✉️ Write to the customer',
+      writeToCustomerHint: 'The message goes to their Messenger. Possible within 24 h of their last message.',
+      messagePlaceholder: 'E.g. Your order arrives tomorrow morning.',
+      sendMessage: 'Send',
       messengerTitle: 'Order received via Messenger',
       messengerReview: 'To check: complete or fix the products with “Edit order”, then confirm it.',
       messengerShortage: 'Not enough stock for at least one product: confirmation will be refused.',

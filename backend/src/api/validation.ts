@@ -47,6 +47,17 @@ export function parsePushTokenRequest(body: unknown): string | null {
   return value;
 }
 
+/** Plafond des frais de livraison (Ariary) : protège contre une faute de frappe. */
+const MAX_DELIVERY_FEE = 1_000_000;
+
+export function parseSettings(body: unknown): { deliveryFee: number } {
+  const deliveryFee = count(record(body)['deliveryFee'], 'deliveryFee');
+  if (deliveryFee > MAX_DELIVERY_FEE) {
+    throw new BadRequestError('Champ « deliveryFee » : 1 000 000 Ar au maximum.');
+  }
+  return { deliveryFee };
+}
+
 export function parseCatalog(body: unknown): CatalogProduct[] {
   const value = record(body);
   const products = value['products'];
@@ -75,6 +86,11 @@ export function parseAck(body: unknown): string[] {
     throw new BadRequestError('Champ « ids » : liste attendue (500 maximum).');
   }
   return ids.map((id: unknown, index) => text(id, `ids[${index}]`, 100));
+}
+
+/** Message écrit par le vendeur (Messenger refuse les textes de plus de 2 000 caractères). */
+export function parseManualMessage(body: unknown): string {
+  return text(record(body)['text'], 'text', 2000);
 }
 
 /** Événement à signaler au client, avec le détail des produits indisponibles le cas échéant. */

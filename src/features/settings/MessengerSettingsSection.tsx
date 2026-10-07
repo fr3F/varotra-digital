@@ -13,6 +13,7 @@ import { ErrorBanner } from '@/shared/components/StatusViews';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
 import { confirmAction } from '@/shared/utils/confirm';
 import { formatDisplayDateTime } from '@/utils/date.utils';
+import { formatMoney } from '@/utils/money.utils';
 import { settingsMessages } from './settings.messages';
 
 function ToggleRow({
@@ -51,6 +52,7 @@ export function MessengerSettingsSection() {
   const [code, setCode] = useState('');
   const [deviceName, setDeviceName] = useState(t.defaultDeviceName);
   const [report, setReport] = useState<string | null>(null);
+  const [deliveryFee, setDeliveryFee] = useState(String(state.deliveryFee));
   const { busy, error, run } = useAsyncAction();
 
   const describe = (imported: number, sent: number) => t.syncReport(imported, sent);
@@ -66,6 +68,12 @@ export function MessengerSettingsSection() {
     run(async () => {
       const result = await messengerSyncService.sync();
       setReport(describe(result.imported, result.customerUpdatesSent));
+    });
+
+  const saveDeliveryFee = () =>
+    run(async () => {
+      await messengerSyncService.setDeliveryFee(deliveryFee);
+      setReport(t.deliveryFeeSaved(formatMoney(messengerStore.get().deliveryFee)));
     });
 
   const disconnect = async () => {
@@ -122,6 +130,21 @@ export function MessengerSettingsSection() {
             description={t.notifyCustomerDescription}
             value={state.notifyCustomer}
             onChange={(value) => void run(() => messengerSyncService.setNotifyCustomer(value))}
+          />
+          <View style={styles.spacer} />
+          <FormField
+            label={t.deliveryFee}
+            value={deliveryFee}
+            onChangeText={setDeliveryFee}
+            keyboardType="number-pad"
+          />
+          <Text style={styles.muted}>{t.deliveryFeeHint}</Text>
+          <AppButton
+            label={t.saveDeliveryFee}
+            variant="secondary"
+            onPress={() => void saveDeliveryFee()}
+            loading={busy}
+            disabled={deliveryFee === String(state.deliveryFee)}
           />
           <View style={styles.actions}>
             <AppButton label={t.syncNow} onPress={() => void syncNow()} loading={busy || state.syncing} />

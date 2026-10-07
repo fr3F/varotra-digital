@@ -75,6 +75,26 @@ export function createFacebookNotificationService(deps: {
       return sent ? { delivered: true, text } : { delivered: false, reason: 'SEND_FAILED', text };
     },
 
+    /**
+     * Message écrit par le vendeur dans l'application, envoyé tel quel au client de la commande.
+     * Même règle des 24 h que les notifications : hors fenêtre, rien n'est envoyé.
+     */
+    async sendManual(draftId: string, text: string): Promise<NotifyResult> {
+      const draft = await repos.drafts.findById(draftId);
+      if (draft === null) {
+        return { delivered: false, reason: 'UNKNOWN_ORDER', text: null };
+      }
+      const conversation = await repos.conversations.find(draft.psid);
+      const lastMessage = conversation?.lastCustomerMessageAt ?? null;
+      if (lastMessage === null || now().getTime() - Date.parse(lastMessage) > MESSAGING_WINDOW_MS) {
+        await repos.outgoing.log({ psid: draft.psid, text, status: 'OUTSIDE_WINDOW', draftId: draft.id, kind: 'MANUAL' });
+        return { delivered: false, reason: 'OUTSIDE_WINDOW', text };
+      }
+      const sent = await send(draft.psid, { text }, { draftId: draft.id, kind: 'MANUAL' });
+      logger.info(`Commande ${draft.reference} : message du vendeur — ${sent ? 'envoyé' : 'échec'}.`);
+      return sent ? { delivered: true, text } : { delivered: false, reason: 'SEND_FAILED', text };
+    },
+
     /** Historique des réponses envoyées pour une commande (accusé, confirmations, indisponibilités…). */
     history(draftId: string): Promise<ReplyRecord[]> {
       return repos.outgoing.findByDraft(draftId);

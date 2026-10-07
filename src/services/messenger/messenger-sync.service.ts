@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { DEFAULT_DELIVERY_FEE } from '@/core/constants/app.constants';
 import { toErrorMessage, ValidationError } from '@/core/errors/app-error';
 import { messengerReplyRepository } from '@/database/repositories/messenger-reply.repository';
 import { productRepository } from '@/database/repositories/product.repository';
@@ -24,7 +25,13 @@ const KEYS = {
   notifyCustomer: `${PREFIX}notifyCustomer`,
   /** Dernier jeton push transmis au serveur ('' : aucun). */
   pushToken: `${PREFIX}pushToken`,
+  deliveryFee: `${PREFIX}deliveryFee`,
+  /** Derniers frais de livraison transmis au serveur ('' : jamais). */
+  deliveryFeeSent: `${PREFIX}deliveryFeeSent`,
 } as const;
+
+/** Plafond aligné sur le serveur : protège contre une faute de frappe. */
+const MAX_DELIVERY_FEE = 1_000_000;
 
 let running: Promise<SyncReport> | null = null;
 /** Jeton Expo Push de ce téléphone, obtenu une fois par lancement (undefined : pas encore demandé). */
@@ -83,18 +90,25 @@ async function syncPushToken(baseUrl: string, token: string): Promise<void> {
   update({ pushActive: wanted !== null });
 }
 
+/** Transmet au serveur les frais de livraison annoncés par le bot, seulement quand ils changent. */
+async function syncDeliveryFee(baseUrl: string, token: string): Promise<void> {
+  const { deliveryFee } = messengerStore.get();
+  const stored = await settingsRepository.getAll(PREFIX);
+  if (stored.get(KEYS.deliveryFeeSent) !== String(deliveryFee)) {
+    await messengerApi.setDeliveryFee(baseUrl, token, deliveryFee);
+    await settingsRepository.set(KEYS.deliveryFeeSent, String(deliveryFee));
+  }
+}
+
 /** Envoie les réponses Facebook en attente ; un échec réseau est retenté au cycle suivant. */
 async function flushReplies(baseUrl: string, token: string): Promise<number> {
   let sent = 0;
   for (const entry of await messengerReplyRepository.findPending()) {
     try {
-      const { result, text } = await messengerApi.notifyCustomer(
-        baseUrl,
-        token,
-        entry.externalRef,
-        entry.kind,
-        entry.unavailable,
-      );
+      const { result, text } =
+        entry.kind === 'MANUAL'
+          ? await messengerApi.sendMessage(baseUrl, token, entry.externalRef, entry.messageText ?? '')
+          : await messengerApi.notifyCustomer(baseUrl, token, entry.externalRef, entry.kind, entry.unavailable);
       await messengerReplyRepository.markProcessed(entry.id, result, text);
       sent += result === 'DELIVERED' ? 1 : 0;
     } catch (error: unknown) {
@@ -115,6 +129,7 @@ async function runSync(): Promise<SyncReport> {
   update({ syncing: true });
   try {
     await messengerApi.pushCatalog(target.baseUrl, target.token, await buildCatalog());
+    await syncDeliveryFee(target.baseUrl, target.token);
     await syncPushToken(target.baseUrl, target.token).catch((error: unknown) =>
       console.warn('[Carnet] Jeton push non transmis', error),
     );
@@ -168,6 +183,7 @@ export const messengerSyncService = {
     const stored = await settingsRepository.getAll(PREFIX);
     const token = await secureToken.get();
     const backendUrl = stored.get(KEYS.backendUrl) ?? null;
+    const deliveryFee = Number(stored.get(KEYS.deliveryFee) ?? DEFAULT_DELIVERY_FEE);
     update({
       connected: backendUrl !== null && backendUrl.length > 0 && token !== null,
       backendUrl: backendUrl === null || backendUrl.length === 0 ? null : backendUrl,
@@ -176,6 +192,7 @@ export const messengerSyncService = {
       // Activée par défaut : stock disponible → confirmée, sinon « Produit indisponible actuellement. ».
       autoReply: stored.get(KEYS.autoReply) !== '0',
       notifyCustomer: stored.get(KEYS.notifyCustomer) !== '0',
+      deliveryFee: Number.isSafeInteger(deliveryFee) && deliveryFee >= 0 ? deliveryFee : DEFAULT_DELIVERY_FEE,
     });
   },
 
@@ -188,8 +205,9 @@ export const messengerSyncService = {
     const name = deviceName.trim().length > 0 ? deviceName.trim() : 'Téléphone';
     const token = await messengerApi.pair(baseUrl, pairingCode.trim(), name);
     await secureToken.set(token);
-    // Nouvel appareil côté serveur : le jeton push doit lui être transmis à nouveau.
+    // Nouvel appareil côté serveur : le jeton push et les frais doivent lui être transmis à nouveau.
     await settingsRepository.set(KEYS.pushToken, '');
+    await settingsRepository.set(KEYS.deliveryFeeSent, '');
     await settingsRepository.set(KEYS.backendUrl, baseUrl);
     await settingsRepository.set(KEYS.deviceName, name);
     update({ connected: true, backendUrl: baseUrl, deviceName: name, lastError: null });
@@ -211,6 +229,20 @@ export const messengerSyncService = {
   async setAutoReply(enabled: boolean): Promise<void> {
     await settingsRepository.set(KEYS.autoReply, enabled ? '1' : '0');
     update({ autoReply: enabled });
+  },
+
+  /** Frais de livraison dans Antananarivo (Ariary) : enregistrés puis transmis au serveur. */
+  async setDeliveryFee(value: string): Promise<void> {
+    const digits = value.replace(/[\s.]/g, '');
+    const fee = Number(digits);
+    if (digits.length === 0 || !Number.isSafeInteger(fee) || fee < 0 || fee > MAX_DELIVERY_FEE) {
+      throw new ValidationError('Frais de livraison : montant entre 0 et 1 000 000 Ar.');
+    }
+    await settingsRepository.set(KEYS.deliveryFee, String(fee));
+    update({ deliveryFee: fee });
+    if (messengerStore.get().connected) {
+      await messengerSyncService.sync();
+    }
   },
 
   async setNotifyCustomer(enabled: boolean): Promise<void> {

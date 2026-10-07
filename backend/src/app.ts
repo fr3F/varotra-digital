@@ -5,8 +5,10 @@ import {
   BadRequestError,
   parseAck,
   parseCatalog,
+  parseManualMessage,
   parseNotifyRequest,
   parsePairRequest,
+  parseSettings,
   parsePushTokenRequest,
 } from './api/validation.ts';
 import type { AppConfig } from './config.ts';
@@ -59,6 +61,7 @@ function toRemoteOrder(draft: OrderDraft) {
     needsReview: draft.needsReview,
     receivedAt: draft.createdAt,
     customerStatus: draft.customerStatus,
+    delivery: draft.delivery,
   };
 }
 
@@ -225,6 +228,13 @@ export function buildApp(deps: AppDeps): CarnetApp {
     return c.json({ count: products.length });
   });
 
+  /** Réglages du vendeur utilisés par le bot (frais de livraison dans Antananarivo). */
+  app.put('/v1/settings', async (c) => {
+    const { deliveryFee } = parseSettings(await jsonBody(c));
+    await repos.settings.setDeliveryFee(deliveryFee);
+    return c.json({ deliveryFee });
+  });
+
   /** Commandes Messenger pas encore importées par l'application. */
   app.get('/v1/orders/pending', async (c) => c.json({ orders: (await repos.drafts.findPending()).map(toRemoteOrder) }));
 
@@ -240,6 +250,12 @@ export function buildApp(deps: AppDeps): CarnetApp {
   app.post('/v1/orders/:id/notify', async (c) => {
     const { event, details } = parseNotifyRequest(await jsonBody(c));
     return c.json(await notifications.notify(c.req.param('id'), event, details));
+  });
+
+  /** Message écrit par le vendeur dans l'application, envoyé au client de la commande. */
+  app.post('/v1/orders/:id/message', async (c) => {
+    const text = parseManualMessage(await jsonBody(c));
+    return c.json(await notifications.sendManual(c.req.param('id'), text));
   });
 
   /** Historique des réponses envoyées au client pour cette commande, et statut qu'il voit. */
