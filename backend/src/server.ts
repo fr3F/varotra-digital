@@ -42,7 +42,17 @@ function main(): void {
   }
 
   const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
-    console.log(`Serveur à l’écoute sur http://${config.host}:${info.port}`);
+    const url = `http://localhost:${info.port}`;
+    // Le serveur tourne tant que la fenêtre reste ouverte : il n'y a pas de « fin » à attendre.
+    console.log(`
+============================================================
+ ✅ Serveur LOCAL démarré : ${url}  (${messengerClient.live ? 'Messenger réel' : 'simulation'})
+    Il tourne tant que cette fenêtre reste ouverte : c'est normal.
+    Arrêter : Ctrl + C
+
+ Ce serveur sert aux essais sur ce PC.
+ Pour mettre en ligne le vrai serveur (Cloudflare) : npm run deploy
+============================================================`);
   });
 
   const shutdown = (): void => {
