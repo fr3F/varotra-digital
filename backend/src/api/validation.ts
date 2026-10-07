@@ -47,6 +47,17 @@ export function parsePushTokenRequest(body: unknown): string | null {
   return value;
 }
 
+/** Plafond des frais de livraison (Ariary) : protège contre une faute de frappe. */
+const MAX_DELIVERY_FEE = 1_000_000;
+
+export function parseSettings(body: unknown): { deliveryFee: number } {
+  const deliveryFee = count(record(body)['deliveryFee'], 'deliveryFee');
+  if (deliveryFee > MAX_DELIVERY_FEE) {
+    throw new BadRequestError('Champ « deliveryFee » : 1 000 000 Ar au maximum.');
+  }
+  return { deliveryFee };
+}
+
 export function parseCatalog(body: unknown): CatalogProduct[] {
   const value = record(body);
   const products = value['products'];

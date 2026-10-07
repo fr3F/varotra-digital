@@ -1,4 +1,5 @@
 import { formatMoney, normalizeText, truncate } from '../shared/format.ts';
+import { DEFAULT_DELIVERY_FEE, type DeliveryInfo, deliveryZone, normalizePhone } from './delivery.ts';
 import { detectLanguage, type Lang, MESSAGES, type Messages } from './i18n.ts';
 import { quantityOnly, replaceNumberWords } from './numbers.ts';
 import { parseOrderMessage } from './order-parser.ts';
@@ -31,6 +32,8 @@ export interface EngineContext {
   readonly lastOrderItems?: readonly DraftItem[];
   /** Produits déjà commandés par ce client, du plus récent au plus ancien. */
   readonly customerProductIds?: readonly string[];
+  /** Frais de livraison dans Antananarivo (Ariary), réglés depuis l'application. */
+  readonly deliveryFee?: number;
 }
 
 /** Mots de question : prix, disponibilité, description (malgache, français, anglais). */
@@ -85,6 +88,8 @@ export interface OrderRequest {
   readonly items: readonly DraftItem[];
   readonly rawText: string | null;
   readonly needsReview: boolean;
+  /** Téléphone, adresse et frais (absent pour un message transmis tel quel). */
+  readonly delivery?: DeliveryInfo;
 }
 
 export interface EngineResult {
@@ -405,6 +410,33 @@ function checkout(state: ConversationState, ctx: EngineContext): EngineResult {
   if (exceedsStock(items, ctx.catalog)) {
     return cartSummary(state, ctx, t(state).cannotValidate);
   }
+  // Le panier est gardé : la commande n'est enregistrée qu'avec le téléphone et l'adresse.
+  return { state: { ...state, step: { kind: 'ASKING_PHONE' } }, replies: [{ text: t(state).askPhone }] };
+}
+
+function receivePhone(text: string, state: ConversationState): EngineResult {
+  const phone = normalizePhone(text);
+  if (phone === null) {
+    return { state, replies: [{ text: t(state).invalidPhone }] };
+  }
+  return { state: { ...state, step: { kind: 'ASKING_ADDRESS', phone } }, replies: [{ text: t(state).askAddress }] };
+}
+
+/** Adresse reçue : frais fixe dans Antananarivo, à convenir ailleurs ; la commande est enregistrée. */
+function receiveAddress(text: string, state: ConversationState, ctx: EngineContext, phone: string): EngineResult {
+  const address = text.trim().replace(/\s+/g, ' ');
+  if (normalizeText(address).length < 3) {
+    return { state, replies: [{ text: t(state).invalidAddress }] };
+  }
+  const items = cartItems(state.cart, ctx.catalog);
+  if (items.length === 0) {
+    return productMenu(resetState(state), ctx, 0, t(state).emptyCart);
+  }
+  // Stock modifié pendant la saisie des coordonnées : rien n'est commandé au-delà du stock.
+  if (exceedsStock(items, ctx.catalog)) {
+    return cartSummary(state, ctx, t(state).cannotValidate);
+  }
+  const zone = deliveryZone(address);
   return {
     state: resetState(state),
     replies: [],
@@ -412,7 +444,9 @@ function checkout(state: ConversationState, ctx: EngineContext): EngineResult {
       mode: state.rawTexts.length > 0 ? 'TEXT' : 'GUIDED',
       items,
       rawText: state.rawTexts.length > 0 ? state.rawTexts.join('\n') : null,
-      needsReview: exceedsStock(items, ctx.catalog),
+      // Hors d'Antananarivo, le vendeur doit appeler le client pour les frais.
+      needsReview: zone === 'OTHER',
+      delivery: { phone, address, zone, fee: zone === 'TANA' ? (ctx.deliveryFee ?? DEFAULT_DELIVERY_FEE) : null },
     },
   };
 }
@@ -471,6 +505,14 @@ function handleText(text: string, current: ConversationState, ctx: EngineContext
   // Le bot répond dans la langue du dernier message reconnu (sinon, la langue précédente).
   const state: ConversationState = { ...current, lang: detectLanguage(text) ?? current.lang };
   const words = normalizeText(text).split(' ');
+
+  // Coordonnées de livraison après « Valider » (« annuler », « foanana »… pour abandonner).
+  if (state.step.kind === 'ASKING_PHONE' || state.step.kind === 'ASKING_ADDRESS') {
+    if (words.length <= 2 && words.some((word) => CANCEL_WORDS.has(word))) {
+      return handlePayload(PAYLOADS.cancel, state, ctx);
+    }
+    return state.step.kind === 'ASKING_PHONE' ? receivePhone(text, state) : receiveAddress(text, state, ctx, state.step.phone);
+  }
 
   // Réponse à « Combien en voulez-vous ? » écrite au clavier (« 3 », « roa », « twelve »…).
   if (state.step.kind === 'CHOOSING_QUANTITY') {
@@ -554,8 +596,17 @@ export function confirmationReply(draft: OrderDraft, lang: Lang): OutgoingReply 
   if (draft.mode === 'RAW') {
     return { text: messages.rawSent(draft.reference) };
   }
-  const total = draft.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  const lines = draft.items.map((item) => `• ${item.quantity} × ${item.productName}`).join('\n');
+  const delivery = draft.delivery;
+  const total = draft.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) + (delivery?.fee ?? 0);
+  const lines = [
+    ...draft.items.map((item) => `• ${item.quantity} × ${item.productName}`),
+    ...(delivery === null
+      ? []
+      : [
+          messages.deliveryContact(delivery.phone, delivery.address),
+          delivery.fee === null ? messages.deliveryToDiscuss : messages.deliveryFee(formatMoney(delivery.fee)),
+        ]),
+  ].join('\n');
   return { text: messages.receipt(draft.reference, lines, formatMoney(total)) };
 }
 

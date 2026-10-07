@@ -34,16 +34,30 @@ async function autoReply(order: Order, lines: readonly OrderLineDraft[]): Promis
   await facebookReplyService.queue(order, 'UNAVAILABLE', { automatic: true, unavailable });
 }
 
-/** Retrouve (ou crée, ou restaure) le client à partir de son identifiant Messenger. */
+/**
+ * Retrouve (ou crée, ou restaure) le client à partir de son identifiant Messenger. Le téléphone
+ * et l'adresse donnés au bot remplacent les précédents (les plus récents sont les bons).
+ */
 async function resolveClient(remote: RemoteOrder): Promise<Client> {
   const existing = await clientRepository.findByMessengerId(remote.customer.psid);
+  const delivery = remote.delivery;
   if (existing !== null) {
-    return existing.deleted ? clientRepository.restore(existing.client.id) : existing.client;
+    const client = existing.deleted ? await clientRepository.restore(existing.client.id) : existing.client;
+    if (delivery === null || (client.phone === delivery.phone && client.address === delivery.address)) {
+      return client;
+    }
+    return clientRepository.update(client.id, {
+      name: client.name,
+      phone: delivery.phone,
+      address: delivery.address,
+      notes: client.notes,
+      messengerId: client.messengerId,
+    });
   }
   return clientRepository.create({
     name: remote.customer.name ?? 'Client Messenger',
-    phone: null,
-    address: null,
+    phone: delivery?.phone ?? null,
+    address: delivery?.address ?? null,
     notes: 'Client créé automatiquement depuis Messenger.',
     messengerId: remote.customer.psid,
   });
@@ -100,6 +114,7 @@ export async function importRemoteOrder(remote: RemoteOrder): Promise<boolean> {
         customerMessage: remote.rawText,
         needsReview: remote.needsReview || isUnclear,
         orderedAt: remote.receivedAt,
+        delivery: remote.delivery,
       },
     );
     return { order: created, lines, unclear: isUnclear };

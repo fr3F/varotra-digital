@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { DEFAULT_DELIVERY_FEE, type DeliveryInfo } from '../domain/delivery.ts';
 import { DEFAULT_LANG, isLang } from '../domain/i18n.ts';
 import {
   type CartItem,
@@ -21,6 +22,8 @@ import { dayPrefix } from '../shared/format.ts';
 import { readNullableString, readNumber, readString, type Row, type SqlDb } from './sql.ts';
 
 const now = (): string => new Date().toISOString();
+/** Clé du réglage « frais de livraison dans Antananarivo » (table settings). */
+const DELIVERY_FEE_KEY = 'deliveryFee';
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -43,7 +46,10 @@ function parseStep(value: unknown): ConversationStep {
   if (kind === 'CHOOSING_QUANTITY' && typeof value['productId'] === 'string') {
     return { kind, productId: value['productId'] };
   }
-  return kind === 'CART' ? { kind } : { kind: 'IDLE' };
+  if (kind === 'ASKING_ADDRESS' && typeof value['phone'] === 'string') {
+    return { kind, phone: value['phone'] };
+  }
+  return kind === 'CART' || kind === 'ASKING_PHONE' ? { kind } : { kind: 'IDLE' };
 }
 
 function parseCart(value: unknown): CartItem[] {
@@ -118,6 +124,22 @@ function toDraft(row: Row): OrderDraft {
     createdAt: readString(row, 'created_at'),
     customerStatus: CUSTOMER_ORDER_STATUSES.find((status) => status === row['customer_status']) ?? 'RECEIVED',
     customerStatusAt: readNullableString(row, 'customer_status_at'),
+    delivery: toDelivery(row),
+  };
+}
+
+function toDelivery(row: Row): DeliveryInfo | null {
+  const phone = readNullableString(row, 'phone');
+  const address = readNullableString(row, 'address');
+  if (phone === null || address === null) {
+    return null;
+  }
+  const fee = row['delivery_fee'];
+  return {
+    phone,
+    address,
+    zone: row['delivery_zone'] === 'TANA' ? 'TANA' : 'OTHER',
+    fee: typeof fee === 'number' ? fee : null,
   };
 }
 
@@ -170,6 +192,22 @@ export function createRepositories(db: SqlDb) {
           available: readNumber(row, 'available'),
           description: readNullableString(row, 'description'),
         }));
+      },
+    },
+
+    settings: {
+      /** Frais de livraison dans Antananarivo (Ariary) : réglé depuis l'application, 3 000 Ar sinon. */
+      async deliveryFee(): Promise<number> {
+        const row = await db.first('SELECT value FROM settings WHERE key = ?', [DELIVERY_FEE_KEY]);
+        const fee = row === null ? Number.NaN : Number(readString(row, 'value'));
+        return Number.isInteger(fee) && fee >= 0 ? fee : DEFAULT_DELIVERY_FEE;
+      },
+      async setDeliveryFee(fee: number): Promise<void> {
+        await db.run(
+          `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+           ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+          [DELIVERY_FEE_KEY, String(fee), now()],
+        );
       },
     },
 
@@ -242,6 +280,7 @@ export function createRepositories(db: SqlDb) {
         items: readonly DraftItem[];
         rawText: string | null;
         needsReview: boolean;
+        delivery?: DeliveryInfo;
       }): Promise<OrderDraft> {
         const createdAt = new Date();
         const prefix = dayPrefix('MSG', createdAt);
@@ -249,8 +288,9 @@ export function createRepositories(db: SqlDb) {
         const count = countRow === null ? 0 : readNumber(countRow, 'total');
         const id = randomUUID();
         await db.run(
-          `INSERT INTO order_drafts (id, reference, psid, customer_name, mode, items_json, raw_text, needs_review, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO order_drafts (id, reference, psid, customer_name, mode, items_json, raw_text, needs_review, created_at,
+             phone, address, delivery_zone, delivery_fee)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             `${prefix}${String(count + 1).padStart(3, '0')}`,
@@ -261,6 +301,10 @@ export function createRepositories(db: SqlDb) {
             input.rawText,
             input.needsReview ? 1 : 0,
             createdAt.toISOString(),
+            input.delivery?.phone ?? null,
+            input.delivery?.address ?? null,
+            input.delivery?.zone ?? null,
+            input.delivery?.fee ?? null,
           ],
         );
         const row = await db.first('SELECT * FROM order_drafts WHERE id = ?', [id]);

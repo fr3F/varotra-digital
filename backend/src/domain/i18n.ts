@@ -78,6 +78,14 @@ export interface Messages {
   readonly textOnly: string;
   /** Consigne sous les choix numérotés (Facebook Lite n'affiche pas les boutons). */
   readonly chooseByNumber: string;
+  /** Livraison : coordonnées demandées après « Valider », avant d'enregistrer la commande. */
+  readonly askPhone: string;
+  readonly invalidPhone: string;
+  readonly askAddress: string;
+  readonly invalidAddress: string;
+  readonly deliveryContact: (phone: string, address: string) => string;
+  readonly deliveryFee: (fee: string) => string;
+  readonly deliveryToDiscuss: string;
   readonly receipt: (reference: string, lines: string, total: string) => string;
   readonly rawSent: (reference: string) => string;
   readonly reference: string;
@@ -148,6 +156,13 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     cartCleared: 'Votre panier a été vidé. Écrivez « menu » pour recommencer.',
     notRecognized: (parts) => `Je n’ai pas reconnu : « ${parts.join(' », « ')} ».`,
     notUnderstood: 'Je n’ai pas bien compris 🙏 Choisissez un produit dans la liste, ou envoyez votre message tel quel au vendeur.',
+    askPhone: 'Parfait ! Pour la livraison, quel est votre numéro de téléphone ? 📞 (ex. : 034 12 345 67)',
+    invalidPhone: 'Je n’ai pas reconnu ce numéro 🙏 Écrivez-le comme ceci : 034 12 345 67',
+    askAddress: 'Merci ! Où faut-il livrer ? 📍 Écrivez l’adresse complète (quartier, ville).',
+    invalidAddress: 'Écrivez l’adresse de livraison (quartier, ville) 📍',
+    deliveryContact: (phone, address) => `📞 ${phone}\n📍 ${address}`,
+    deliveryFee: (fee) => `🚚 Livraison (Antananarivo) : ${fee}`,
+    deliveryToDiscuss: '🚚 Livraison hors d’Antananarivo : le responsable vous appellera pour convenir des frais.',
     chooseByNumber: '✍️ Répondez avec le numéro (ex. : 1)',
     textOnly: 'Je ne peux lire que les messages écrits pour le moment. Écrivez votre commande 🙂',
     receipt: (reference, lines, total) =>
@@ -225,6 +240,13 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     cartCleared: 'Voafafa ny haronao. Soraty hoe « menu » raha hanomboka indray.',
     notRecognized: (parts) => `Tsy fantatro : « ${parts.join(' », « ')} ».`,
     notUnderstood: 'Tsy azoko tsara 🙏 Mifidiana entana ao amin’ny lisitra, na alefaso amin’ny mpivarotra ny hafatrao.',
+    askPhone: 'Tsara! Ho an’ny fanaterana, inona ny laharana findainao? 📞 (ohatra: 034 12 345 67)',
+    invalidPhone: 'Tsy fantatro io laharana io 🙏 Soraty toy izao azafady: 034 12 345 67',
+    askAddress: 'Misaotra! Aiza no hanaterana azy? 📍 Soraty ny adiresy feno (fokontany, tanàna).',
+    invalidAddress: 'Soraty ny adiresy hanaterana azy (fokontany, tanàna) 📍',
+    deliveryContact: (phone, address) => `📞 ${phone}\n📍 ${address}`,
+    deliveryFee: (fee) => `🚚 Saran’ny fanaterana (Antananarivo): ${fee}`,
+    deliveryToDiscuss: '🚚 Fanaterana ivelan’i Antananarivo: hiantso anao ny tompon’andraikitra mba hiresahana ny saran’ny fanaterana.',
     chooseByNumber: '✍️ Valio amin’ny laharana (ohatra: 1)',
     textOnly: 'Hafatra an-tsoratra ihany no vakiako amin’izao. Soraty ny kaomandinao 🙂',
     receipt: (reference, lines, total) =>
@@ -302,6 +324,13 @@ export const MESSAGES: Readonly<Record<Lang, Messages>> = {
     cartCleared: 'Your cart has been emptied. Type “menu” to start again.',
     notRecognized: (parts) => `I didn’t recognize: “${parts.join('”, “')}”.`,
     notUnderstood: 'Sorry, I didn’t understand 🙏 Pick a product from the list, or send your message as is to the seller.',
+    askPhone: 'Great! For delivery, what is your phone number? 📞 (e.g. 034 12 345 67)',
+    invalidPhone: 'I didn’t recognise that number 🙏 Please write it like this: 034 12 345 67',
+    askAddress: 'Thanks! Where should we deliver? 📍 Write the full address (area, town).',
+    invalidAddress: 'Please write the delivery address (area, town) 📍',
+    deliveryContact: (phone, address) => `📞 ${phone}\n📍 ${address}`,
+    deliveryFee: (fee) => `🚚 Delivery (Antananarivo): ${fee}`,
+    deliveryToDiscuss: '🚚 Delivery outside Antananarivo: the manager will call you to agree on the fee.',
     chooseByNumber: '✍️ Reply with the number (e.g. 1)',
     textOnly: 'I can only read text messages for now. Please type your order 🙂',
     receipt: (reference, lines, total) =>

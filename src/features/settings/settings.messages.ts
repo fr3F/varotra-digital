@@ -57,6 +57,10 @@ export const settingsMessages = defineMessages(
       notifyCustomer: 'Prévenir le client',
       notifyCustomerDescription:
         'Message Messenger quand vous confirmez, livrez ou annulez une commande (dans les 24 h suivant son dernier message).',
+      deliveryFee: 'Frais de livraison à Antananarivo (Ar)',
+      deliveryFeeHint: 'Annoncés par le bot après le téléphone et l’adresse du client. Hors d’Antananarivo : frais à convenir par téléphone.',
+      saveDeliveryFee: 'Enregistrer les frais',
+      deliveryFeeSaved: (fee: string) => `Frais de livraison : ${fee}`,
       syncNow: 'Synchroniser maintenant',
       replyHistory: 'Historique des réponses',
     },
@@ -126,6 +130,10 @@ export const settingsMessages = defineMessages(
         notifyCustomer: 'Hampandre ny mpividy',
         notifyCustomerDescription:
           'Hafatra Messenger rehefa manamafy, manatitra na manafoana kaomandy ianao (ao anatin’ny 24 ora taorian’ny hafany farany).',
+        deliveryFee: 'Saran’ny fanaterana ao Antananarivo (Ar)',
+        deliveryFeeHint: 'Ambaran’ny bot rehefa nomen’ny mpanjifa ny laharana sy ny adiresy. Ivelan’i Antananarivo: resahina an-telefaona.',
+        saveDeliveryFee: 'Tehirizo ny saran’ny fanaterana',
+        deliveryFeeSaved: (fee: string) => `Saran’ny fanaterana: ${fee}`,
         syncNow: 'Ampifanaraho izao',
         replyHistory: 'Tantaran’ny valiny',
       },
@@ -193,6 +201,10 @@ export const settingsMessages = defineMessages(
         notifyCustomer: 'Notify the customer',
         notifyCustomerDescription:
           'Messenger message when you confirm, deliver or cancel an order (within 24 h of their last message).',
+        deliveryFee: 'Delivery fee in Antananarivo (Ar)',
+        deliveryFeeHint: 'Announced by the bot after the customer’s phone and address. Outside Antananarivo: fee agreed by phone.',
+        saveDeliveryFee: 'Save delivery fee',
+        deliveryFeeSaved: (fee: string) => `Delivery fee: ${fee}`,
         syncNow: 'Sync now',
         replyHistory: 'Reply history',
       },

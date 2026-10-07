@@ -23,6 +23,11 @@ function converse(messages: IncomingMessage[], start: ConversationState = INITIA
 }
 
 const quick = (payload: string): IncomingMessage => ({ kind: 'QUICK_REPLY', payload, text: '' });
+/** Téléphone puis adresse, demandés après « Valider » avant d'enregistrer la commande. */
+const contact: IncomingMessage[] = [
+  { kind: 'TEXT', text: '034 12 345 67' },
+  { kind: 'TEXT', text: 'Lot II A 12, Analakely Antananarivo' },
+];
 
 describe('conversation guidée', () => {
   it('accueille le client et propose seulement les produits disponibles', () => {
@@ -41,6 +46,7 @@ describe('conversation guidée', () => {
       quick(PAYLOADS.product('huile')),
       quick(PAYLOADS.quantity(2)),
       quick(PAYLOADS.checkout),
+      ...contact,
     ]);
     assert.equal(result.order?.mode, 'GUIDED');
     assert.deepEqual(result.order?.items, [{ productId: 'huile', productName: 'Huile Tiko 1L', quantity: 2, unitPrice: 9500 }]);
@@ -49,7 +55,7 @@ describe('conversation guidée', () => {
   });
 
   it('accepte une quantité tapée au clavier', () => {
-    const result = converse([quick(PAYLOADS.product('huile')), { kind: 'TEXT', text: '2' }, quick(PAYLOADS.checkout)]);
+    const result = converse([quick(PAYLOADS.product('huile')), { kind: 'TEXT', text: '2' }, quick(PAYLOADS.checkout), ...contact]);
     assert.equal(result.order?.items[0]?.quantity, 2);
     assert.equal(result.order?.needsReview, false);
   });
@@ -76,7 +82,7 @@ describe('vérification du stock avant validation', () => {
     assert.match(adjusted.replies[0]?.text ?? '', /Nahitsy araka ny tahiry[\s\S]*3 × Huile Tiko 1L/);
     assert.equal(adjusted.replies[0]?.quickReplies?.[0]?.payload, PAYLOADS.checkout);
 
-    const result = converse([{ kind: 'TEXT', text: 'mila huile tiko 50' }, quick(PAYLOADS.adjust), quick(PAYLOADS.checkout)]);
+    const result = converse([{ kind: 'TEXT', text: 'mila huile tiko 50' }, quick(PAYLOADS.adjust), quick(PAYLOADS.checkout), ...contact]);
     assert.equal(result.order?.items[0]?.quantity, 3);
     assert.equal(result.order?.needsReview, false);
   });
@@ -251,7 +257,7 @@ describe('langues : malgache, français, anglais', () => {
 
   it('« eny » / « yes » / « oui » valident le panier, la quantité peut être écrite en lettres', () => {
     for (const word of ['eny', 'yes', 'oui']) {
-      const result = converse([{ kind: 'TEXT', text: 'savon 2' }, { kind: 'TEXT', text: word }]);
+      const result = converse([{ kind: 'TEXT', text: 'savon 2' }, { kind: 'TEXT', text: word }, ...contact]);
       assert.equal(result.order?.items[0]?.quantity, 2, word);
     }
     const typed = converse([quick(PAYLOADS.product('savon')), { kind: 'TEXT', text: 'telo' }]);
@@ -270,7 +276,7 @@ describe('texte libre', () => {
     assert.match(cart.replies[0]?.text ?? '', /2 × Huile Tiko 1L/);
     assert.match(cart.replies[0]?.text ?? '', /Totaly : 23 500 Ar/);
 
-    const result = converse([{ kind: 'TEXT', text: 'Bonjour, mila huile tiko 2 sy savon 3' }, quick(PAYLOADS.checkout)]);
+    const result = converse([{ kind: 'TEXT', text: 'Bonjour, mila huile tiko 2 sy savon 3' }, quick(PAYLOADS.checkout), ...contact]);
     assert.equal(result.order?.mode, 'TEXT');
     assert.equal(result.order?.rawText, 'Bonjour, mila huile tiko 2 sy savon 3');
   });
@@ -290,3 +296,54 @@ describe('texte libre', () => {
     assert.match(result.replies[0]?.text ?? '', /messages écrits/);
   });
 });
+
+describe('coordonnées de livraison après « Valider »', () => {
+  const validated = [quick(PAYLOADS.product('savon')), quick(PAYLOADS.quantity(2)), quick(PAYLOADS.checkout)];
+
+  it('demande le téléphone, puis l’adresse, avant d’enregistrer la commande', () => {
+    const phone = converse(validated);
+    assert.equal(phone.order, undefined);
+    assert.match(phone.replies[0]?.text ?? '', /numéro de téléphone/);
+    assert.deepEqual(phone.state.cart, [{ productId: 'savon', quantity: 2 }]);
+
+    const address = converse([...validated, { kind: 'TEXT', text: '0341234567' }]);
+    assert.equal(address.order, undefined);
+    assert.match(address.replies[0]?.text ?? '', /Où faut-il livrer/);
+  });
+
+  it('numéro non reconnu : redemandé', () => {
+    const result = converse([...validated, { kind: 'TEXT', text: 'demain' }]);
+    assert.equal(result.state.step.kind, 'ASKING_PHONE');
+    assert.match(result.replies[0]?.text ?? '', /pas reconnu ce numéro/);
+  });
+
+  it('Antananarivo : frais réglé dans l’application', () => {
+    let state = INITIAL_CONVERSATION;
+    let result = handleMessage(state, validated[0] ?? quick(''), ctx);
+    for (const message of [...validated.slice(1), ...contact]) {
+      state = result.state;
+      result = handleMessage(state, message, { ...ctx, deliveryFee: 5000 });
+    }
+    assert.deepEqual(result.order?.delivery, {
+      phone: '034 12 345 67',
+      address: 'Lot II A 12, Analakely Antananarivo',
+      zone: 'TANA',
+      fee: 5000,
+    });
+    assert.equal(result.order?.needsReview, false);
+  });
+
+  it('hors d’Antananarivo : frais à convenir, le vendeur doit rappeler le client', () => {
+    const result = converse([...validated, { kind: 'TEXT', text: '0321234567' }, { kind: 'TEXT', text: 'Toamasina, Bazary be' }]);
+    assert.equal(result.order?.delivery?.zone, 'OTHER');
+    assert.equal(result.order?.delivery?.fee, null);
+    assert.equal(result.order?.needsReview, true);
+  });
+
+  it('« foanana » pendant la saisie : panier annulé, aucune commande', () => {
+    const result = converse([...validated, { kind: 'TEXT', text: 'foanana' }]);
+    assert.equal(result.order, undefined);
+    assert.deepEqual(result.state.cart, []);
+  });
+});
+

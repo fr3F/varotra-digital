@@ -1,3 +1,4 @@
+import type { DeliveryInfo } from './delivery.ts';
 import { DEFAULT_LANG, type Lang } from './i18n.ts';
 
 /** Produit tel que l'application l'envoie au backend (copie du catalogue du téléphone). */
@@ -23,7 +24,10 @@ export type ConversationStep =
   | { readonly kind: 'IDLE' }
   | { readonly kind: 'CHOOSING_PRODUCT'; readonly page: number }
   | { readonly kind: 'CHOOSING_QUANTITY'; readonly productId: string }
-  | { readonly kind: 'CART' };
+  | { readonly kind: 'CART' }
+  /** Panier validé : le bot demande le téléphone, puis l'adresse de livraison. */
+  | { readonly kind: 'ASKING_PHONE' }
+  | { readonly kind: 'ASKING_ADDRESS'; readonly phone: string };
 
 export interface ConversationState {
   readonly step: ConversationStep;
@@ -71,6 +75,8 @@ export interface OrderDraft {
   /** Dernier statut annoncé au client. */
   readonly customerStatus: CustomerOrderStatus;
   readonly customerStatusAt: string | null;
+  /** Téléphone, adresse et frais annoncés (null : commande transmise telle quelle, ou ancienne commande). */
+  readonly delivery: DeliveryInfo | null;
 }
 
 /** Réponse envoyée au client sur Messenger. */
