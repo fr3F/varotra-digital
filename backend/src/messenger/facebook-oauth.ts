@@ -74,6 +74,9 @@ export function createFacebookOAuth(options: {
         state,
         response_type: 'code',
         scope: FACEBOOK_SCOPES.join(','),
+        // Reposer toutes les questions, dont le choix des Pages : sinon Facebook réutilise en silence
+        // les Pages choisies la fois précédente et le vendeur ne peut pas en choisir une autre.
+        auth_type: 'reauthorize',
       });
       return `https://www.facebook.com/${options.graphApiVersion}/dialog/oauth?${query.toString()}`;
     },

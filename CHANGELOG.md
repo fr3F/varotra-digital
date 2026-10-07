@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 ## [Unreleased]
 
 ### Corrigé
+- « Se connecter avec Facebook » : Facebook propose à nouveau le choix des Pages à chaque connexion (auth_type=reauthorize) ; avant, il reprenait en silence la Page choisie la première fois.
 - Bot Messenger lisible sur Facebook Lite (téléphone), qui n'affiche aucune bulle à boutons : le texte part seul avec les choix numérotés (« 1. Kiraro… ✍️ Valio amin'ny laharana »), le client peut répondre « 1 », « 2 »… ; les boutons suivent dans une bulle « 👇 » pour Messenger (META_BUTTON_STYLE=text_first, par défaut ; template et quick_replies restent possibles).
 
 ### Ajouté
