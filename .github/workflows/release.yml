@@ -72,4 +72,7 @@ jobs:
         if: env.EXPO_TOKEN != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" "carnet-digital-${GITHUB_REF_NAME}.apk"
+        # Deux noms : versionné, et fixe pour le lien permanent releases/latest/download/carnet-digital.apk (APK_URL).
+        run: |
+          cp "carnet-digital-${GITHUB_REF_NAME}.apk" carnet-digital.apk
+          gh release upload "$GITHUB_REF_NAME" "carnet-digital-${GITHUB_REF_NAME}.apk" carnet-digital.apk

@@ -22,9 +22,9 @@
     "CONTACT_EMAIL": "frazakarivony.dev@gmail.com",
     "CORS_ORIGINS": "",
     "DEV_TOOLS": "false",
-    // Dernière APK (lien « Download » du build EAS) : https://…workers.dev/apk y redirige.
-    // À mettre à jour à chaque nouvelle APK, puis npm run deploy. Vide : /apk répond « pas disponible ».
-    "APK_URL": ""
+    // Dernière APK : celle jointe à la dernière release GitHub (release.yml, nom fixe carnet-digital.apk).
+    // https://…workers.dev/apk y redirige ; rien à changer à chaque version. Vide : /apk répond « pas disponible ».
+    "APK_URL": "https://github.com/fr3F/varotra-digital/releases/latest/download/carnet-digital.apk"
   },
   "d1_databases": [
     {
