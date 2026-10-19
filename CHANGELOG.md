@@ -4,6 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versions : 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
+### Modifié
+- Lien permanent de l'APK : https://…workers.dev/apk redirige vers l'APK de la dernière release GitHub (release.yml la joint aussi sous le nom fixe carnet-digital.apk) ; plus de mise à jour d'APK_URL à chaque version.
+
 ### Ajouté
 - Frais de livraison « à convenir » (hors Antananarivo) : champ sur la fiche commande ; une fois saisis, ils sont enregistrés et envoyés au client sur Messenger avec le total à payer, dans sa langue (POST /v1/orders/:id/delivery-fee, file d'envoi hors ligne, règle des 24 h).
 

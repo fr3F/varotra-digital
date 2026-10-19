@@ -15,8 +15,8 @@ Les blocs en anglais sont à **copier-coller** dans les formulaires Meta (les ex
 | E-mail de contact dans la politique de confidentialité | `CONTACT_EMAIL` dans `backend/wrangler.jsonc` | fait (frazakarivony.dev@gmail.com) |
 | Politique de confidentialité à jour (téléphone et adresse de livraison, données des vendeurs) | `backend/src/api/legal-pages.ts` | fait |
 | Paramètres de base de l'application (§2) | developers.facebook.com › votre app › Paramètres › Général | à vérifier |
-| APK de test téléchargeable (lien EAS ou release GitHub) | `eas build --profile preview` | à faire |
-| Boutique de test + code d'activation pour les examinateurs | `https://carnet-digital-backend.fb-page-bot.workers.dev/admin` | à faire |
+| APK de test téléchargeable | `https://carnet-digital-backend.fb-page-bot.workers.dev/apk` (dernière release GitHub) | fait |
+| Boutique de test + code d'activation pour les examinateurs | `/admin` : boutique « Meta Review » (jusqu'au 19/10/2027, code visible dans /admin) | fait |
 | Vidéos (une par autorisation, ou une vidéo couvrant tout) | §4 | à faire |
 | Langue de l'application sur **English** pendant les vidéos | bouton 🇬🇧 en haut de l'écran | — |
 
@@ -118,11 +118,11 @@ langue de l'application sur **English**, durée 2–4 min, sans montage trompeur
 
 ## 5. Instructions pour les examinateurs (« Test instructions »)
 
-Avant d'envoyer : créer dans `/admin` une boutique « Meta Review » (12 mois) et remplacer `KD-XXXX-XXXX`
-ci-dessous par son code ; mettre le lien de l'APK.
+Avant d'envoyer : remplacer `KD-XXXX-XXXX` ci-dessous par le code de la boutique « Meta Review » (visible dans
+`/admin` ; il n'est pas écrit ici car le dépôt est public).
 
 ```text
-1. Install the Android app from: <APK LINK>
+1. Install the Android app from: https://carnet-digital-backend.fb-page-bot.workers.dev/apk
 2. Open the app. Tap the flag at the top to switch the language to English.
 3. Go to the Settings tab > "Facebook Messenger orders".
    Server address (already filled): https://carnet-digital-backend.fb-page-bot.workers.dev
@@ -150,8 +150,8 @@ Deletion: on request through the data deletion page (within 30 days); disconnect
 processing for it.
 ```
 
-La politique de confidentialité (`/privacy`) décrit les mêmes données (clients et boutiques). **Reste à faire** :
-renseigner `CONTACT_EMAIL`, l'e-mail affiché sur `/privacy` et `/data-deletion`.
+La politique de confidentialité (`/privacy`) décrit les mêmes données (clients et boutiques), avec l'e-mail de
+contact `CONTACT_EMAIL`.
 
 ## 7. Après validation
 
